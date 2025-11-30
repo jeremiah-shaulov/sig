@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.1"
+import {Sig} from "jsr:@shaulov/sig@0.0.2"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
@@ -194,7 +194,7 @@ Type of the value stored in the signal.
 - 7 properties:
 [value](#-accessor-value-t),
 [this](#-get-this-thissigt),
-[mut](#-get-mut-t-extends-recordstring--symbol-any--k-in-keyof-t-k-extends-number--never--k-tk-extends-args-any--any--tk--never--t-extends-record--k-in-rk-k-extends-number--never--k-recordk-extends-args-any--any--recordk--never--object),
+[mut](#-get-mut-mutsigt),
 [promise](#-get-promise-promiset),
 [busy](#-get-busy-sigboolean),
 [error](#-get-error-sigerror),
@@ -232,13 +232,13 @@ Type of the value stored in the signal.
 
 #### 📄 `get` this(): ThisSig\<T>
 
-> Returns a Proxy-wrapped version of this signal providing the [ThisSig](../type.ThisSig/README.md) interface.
+> Returns a Proxy-wrapped version of this signal providing the `ThisSig` interface.
 > Enables accessing properties and methods of the signal's value as signals.
 > Property accesses are cached.
 
 
 
-#### 📄 `get` mut(): T `extends` Record\<`string` | `symbol`, `any`> ? \{\[K `in` keyof T: K `extends` `number` ? `never` : K]: T\[K] `extends` (...args: `any`\[]) => `any` ? T\[K] : `never`} : T `extends` Record\<...> ? \{\[K `in` RK: K `extends` `number` ? `never` : K]: Record\<...>\[K] `extends` (...args: `any`\[]) => `any` ? Record\<...>\[K] : `never`} : `object`
+#### 📄 `get` mut(): MutSig\<T>
 
 > Provides access to mutable methods that trigger change notifications.
 > 
@@ -387,6 +387,8 @@ Type of the value stored in the signal.
 > console.log(sigA.value); // 5
 > sigA.value = 15;
 > console.log(sigA.error.value?.message); // Value must be less than or equal to 10
+> sigA.value = -15;
+> console.log(sigA.value); // -15
 > ```
 
 
@@ -423,9 +425,15 @@ Type of the value stored in the signal.
 
 #### ⚙ toJSON(): T
 
+> For `JSON.stringify()`.
+> Returns the current value of the signal (`this.value`).
+
 
 
 #### ⚙ \[Symbol.toPrimitive](): `string`
+
+> Automatic conversion to string.
+> Returns computation function converted to string, or value for non-computed signals.
 
 
 

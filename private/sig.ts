@@ -91,6 +91,14 @@ type OnChange<T> = (this: Sig<T>, prevValue: T|Error) => void;
  **/
 type OnChangeRecord<T> = {callback: OnChange<T>, thisArg: Sig<T>, prevValue: T|Error};
 
+type MutSig<T> =
+(	T extends Record<string|symbol, Any> ?
+		{[K in keyof T as K extends number ? never : K]: T[K] extends ((...args: Any[]) => Any) ? T[K] : never} :
+	T extends Record<infer RK, infer RV>|null|undefined ?
+		{[K in RK as K extends number ? never : K]: Record<RK, RV>[K] extends ((...args: Any[]) => Any) ? Record<RK, RV>[K]|undefined : never} :
+		object
+);
+
 /**	Processes all pending signal recomputations and onChange callbacks.
 	This ensures that signals are updated in the correct order and all listeners are notified.
  **/
@@ -469,7 +477,7 @@ export class Sig<T>
 		}
 	}
 
-	/**	Returns a Proxy-wrapped version of this signal providing the {@link ThisSig} interface.
+	/**	Returns a Proxy-wrapped version of this signal providing the `ThisSig` interface.
 		Enables accessing properties and methods of the signal's value as signals.
 		Property accesses are cached.
 	**/
@@ -539,13 +547,7 @@ export class Sig<T>
 		If the called method returned a Promise, the notification is triggered after it resolves.
 		For rejected Promises, no notification occurs.
 	 **/
-	get mut():
-	(	T extends Record<string|symbol, Any> ?
-			{[K in keyof T as K extends number ? never : K]: T[K] extends ((...args: Any[]) => Any) ? T[K] : never} :
-		T extends Record<infer RK, infer RV>|null|undefined ?
-			{[K in RK as K extends number ? never : K]: Record<RK, RV>[K] extends ((...args: Any[]) => Any) ? Record<RK, RV>[K]|undefined : never} :
-			object
-	)
+	get mut(): MutSig<T>
 	{	return new Proxy
 		(	{},
 			{	get: (_target, prop) =>
@@ -682,6 +684,8 @@ export class Sig<T>
 		console.log(sigA.value); // 5
 		sigA.value = 15;
 		console.log(sigA.error.value?.message); // Value must be less than or equal to 10
+		sigA.value = -15;
+		console.log(sigA.value); // -15
 		```
 	 **/
 	setConverter(compValue: (value: T) => ValueOrPromise<T>)
@@ -742,10 +746,16 @@ export class Sig<T>
 		}
 	}
 
+	/**	Automatic conversion to string.
+		Returns computation function converted to string, or value for non-computed signals.
+	 **/
 	[Symbol.toPrimitive]()
 	{	return this[_compValue]+'';
 	}
 
+	/**	For `JSON.stringify()`.
+		Returns the current value of the signal (`this.value`).
+	 **/
 	toJSON(): T
 	{	return this.value;
 	}
