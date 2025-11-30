@@ -465,7 +465,7 @@ export class Sig<T>
 			this[_compValue] = unwrapSig(compValue);
 			this[_cancelComp] = typeof(this[_compValue])=='function' ? cancelComp as CancelComp<unknown> : undefined;
 			this[_flags] = Flags.WantRecomp | (this[_flags] & Flags.IsErrorSignal);
-			recomp(this, CompType.None) && flushPendingOnChange();
+			recomp(this, CompType.None, undefined, true) && flushPendingOnChange();
 		}
 	}
 
@@ -787,7 +787,7 @@ function removeMyselfAsDepFromUsedSignals<T>(that: Sig<T>)
 	that[_iDependOn].length = 0;
 }
 
-function recomp<T>(that: Sig<T>, compType: CompType, cause?: Sig<unknown>): CompType
+function recomp<T>(that: Sig<T>, compType: CompType, cause?: Sig<unknown>, noCancelComp=false): CompType
 {	addMyselfAsDepToBeingComputed(that, compType);
 	if ((that[_flags] & Flags.ValueStatusMask) == Flags.WantRecomp)
 	{	that[_flags] = Flags.RecompInProgress | (that[_flags] & Flags.IsErrorSignal);
@@ -800,7 +800,7 @@ function recomp<T>(that: Sig<T>, compType: CompType, cause?: Sig<unknown>): Comp
 		{	const prevEvalContext = evalContext;
 			evalContext = that as Sig<unknown>;
 			try
-			{	if (that[_valuePromise])
+			{	if (!noCancelComp && that[_valuePromise])
 				{	that[_cancelComp]?.(that[_valuePromise]);
 				}
 				const result = (compValue as CompValue<T>)(() => sigSync(that), cause);
