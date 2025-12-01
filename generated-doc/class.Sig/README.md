@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.3"
+import {Sig} from "jsr:@shaulov/sig@0.0.4"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
@@ -424,7 +424,7 @@ Type of the value stored in the signal.
 #### ⚙ \[Symbol.toPrimitive](): `string`
 
 > Automatic conversion to string.
-> Returns computation function converted to string, or value for non-computed signals.
+> Returns word "Sig" with appended computation function converted to string, or value for non-computed signals.
 
 
 

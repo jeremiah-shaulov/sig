@@ -1,6 +1,6 @@
 <!--
 	This file is generated with the following command:
-	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.3/README.md --importUrl=jsr:@shaulov/sig@0.0.3 mod.ts
+	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.4/README.md --importUrl=jsr:@shaulov/sig@0.0.4 mod.ts
 -->
 
 # sig - feature-rich multipurpose signals library
@@ -32,10 +32,10 @@ This signals implementation is unique. Here are it's main features:
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.3/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.4/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
 // deno run --allow-net /tmp/example-p9mn.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.3';
+import {sig} from 'jsr:@shaulov/sig@0.0.4';
 
 // Load data asynchronously
 const dataLoader = sig(fetch('https://example.com/').then(res => res.text()));
@@ -321,7 +321,7 @@ Pass a `WeakRef` to `subscribe()` for automatic cleanup when the referenced obje
 is garbage collected:
 
 ```ts
-import {sig, Sig} from 'jsr:@shaulov/sig@0.0.3';
+import {sig, Sig} from 'jsr:@shaulov/sig@0.0.4';
 
 const mySig = sig(42);
 
@@ -377,7 +377,7 @@ and you should keep strong references to signals that you still need.
 The following example proves this.
 
 ```ts
-import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.3';
+import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.4';
 
 const sigA = sig(0);
 
@@ -427,6 +427,48 @@ const sigC = sig
 		return a + b;
 	}
 );
+```
+
+### Debugging Dependencies
+
+Sometimes it's not obvious which dependency caused a recomputation.
+This library passes 2 arguments to computation functions: `sync` (see above) and `cause`.
+The latter is a signal that caused the recomputation, or `undefined` if this is the first computation.
+`cause` is tracked only for signals, that have subscribers.
+
+```ts
+// To download and run this example:
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.4/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
+// deno run /tmp/example-65ya.ts
+
+import {sig} from 'jsr:@shaulov/sig@0.0.4';
+import {assertEquals} from 'jsr:@std/assert@1.0.16/equals';
+
+const sigA = sig(1);
+const sigB = sig(2);
+const sigC = sig(3);
+
+const computed = sig
+(	(_sync, cause) =>
+	{	if (cause)
+		{	console.log(`Recomputed because of: ${cause}`);
+		}
+		else
+		{	console.log('Initial computation');
+		}
+		return sigA.value + sigB.value + sigC.value;
+	}
+);
+
+computed.subscribe(() => {}); // add subscription to enable cause tracking
+
+assertEquals(computed.value, 6); // Initial computation
+
+sigA.value = 10; // Recomputed because of: 10
+assertEquals(computed.value, 15);
+
+sigB.value = 20; // Recomputed because of: 20
+assertEquals(computed.value, 33);
 ```
 
 ### Change Detection
@@ -586,10 +628,10 @@ before storing it in the signal.
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.3/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
-// deno run /tmp/example-65ya.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.4/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-pf4z>/' > /tmp/example-pf4z.ts
+// deno run /tmp/example-pf4z.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.3';
+import {sig} from 'jsr:@shaulov/sig@0.0.4';
 
 const sigA = sig(1);
 sigA.setConverter

@@ -3,9 +3,6 @@
 	This benchmark suite compares the performance characteristics of the local
 	signals implementation against Preact's @preact/signals-core across various
 	use cases.
-
-	Note: Type checking is relaxed in this file to allow comparison benchmarks
-	between different API styles without excessive type assertions.
  **/
 
 import {type Sig, sig, batch} from '../mod.ts';

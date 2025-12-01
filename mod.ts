@@ -419,6 +419,47 @@
 	);
 	```
 
+	### Debugging Dependencies
+
+	Sometimes it's not obvious which dependency caused a recomputation.
+	This library passes 2 arguments to computation functions: `sync` (see above) and `cause`.
+	The latter is a signal that caused the recomputation, or `undefined` if this is the first computation.
+	`cause` is tracked only for signals, that have subscribers.
+
+	```ts
+	// To run this example:
+	// deno run example.ts
+
+	import {sig} from './mod.ts';
+	import {assertEquals} from 'jsr:@std/assert@1.0.16/equals';
+
+	const sigA = sig(1);
+	const sigB = sig(2);
+	const sigC = sig(3);
+
+	const computed = sig
+	(	(_sync, cause) =>
+		{	if (cause)
+			{	console.log(`Recomputed because of: ${cause}`);
+			}
+			else
+			{	console.log('Initial computation');
+			}
+			return sigA.value + sigB.value + sigC.value;
+		}
+	);
+
+	computed.subscribe(() => {}); // add subscription to enable cause tracking
+
+	assertEquals(computed.value, 6); // Initial computation
+
+	sigA.value = 10; // Recomputed because of: 10
+	assertEquals(computed.value, 15);
+
+	sigB.value = 20; // Recomputed because of: 20
+	assertEquals(computed.value, 33);
+	```
+
 	### Change Detection
 
 	Changes propagate through the dependency graph, triggering recomputations only when
