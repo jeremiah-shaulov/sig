@@ -360,6 +360,46 @@
 	Child signals hold weak references to parent computed signals, allowing parent signals
 	to be garbage collected when no longer referenced elsewhere.
 
+	This particularly means, that computed signals with subscribers will stop
+	producing notifications, if the signal vanishes,
+	and you should keep strong references to signals that you still need.
+
+	The following example proves this.
+
+	```ts
+	import {type Sig, sig} from './mod.ts';
+
+	const sigA = sig(0);
+
+	let sigB: Sig<string> | undefined = sig(() => `Value: ${sigA.value}`, '');
+	sigB.subscribe
+	(	function()
+		{	console.log(this.value);
+		}
+	);
+
+	// After 3 seconds, remove reference to sigB
+	setTimeout
+	(	() =>
+		{	sigB = undefined;
+
+			// Create memory pressure to encourage GC (works on most JS engines)
+			const waste: unknown[] = [];
+			for (let i=0; i<5000; i++)
+			{	waste.push(new Array(10000).fill(Math.random()));
+			}
+			waste.length = 0; // Release the waste
+		},
+		3000
+	);
+
+	// Increment sigA every second to trigger notifications
+	const h = setInterval(() => sigA.inc(), 1000);
+
+	// Stop after 10 seconds
+	setTimeout(() => clearInterval(h), 10_000);
+	```
+
 	### Async Dependency Tracking
 
 	For async computations, dependencies are tracked only until the first `await`.
@@ -536,7 +576,7 @@
 
 	```ts
 	// To run this example:
-	// deno run --allow-net example.ts
+	// deno run example.ts
 
 	import {sig} from './mod.ts';
 
@@ -573,6 +613,7 @@
 	- {@link Sig} signal class.
 	- {@link sig()} factory function to create signals.
 	- {@link batch()} function to batch changes.
+	- {@link _deepEquals()} function that this module uses internally for deep equality checks.
 
 	@module
 	@summary sig - feature-rich multipurpose signals library

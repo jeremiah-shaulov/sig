@@ -1,6 +1,14 @@
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
+/**	Performs a deep equality comparison between two values.
+	This function compares primitive values, arrays, and objects recursively.
+	It handles circular references and compares object properties including getters.
+
+	@param a - The first value to compare
+	@param b - The second value to compare
+	@returns `true` if the values are deeply equal, `false` otherwise
+ **/
 export function deepEquals(a: unknown, b: unknown)
 {	return subequals(a, b, false, false, [], []);
 }
