@@ -1,4 +1,5 @@
 /**	This module is signals library for any purpose.
+	It can be used with deno, bun, node, or in browser environment.
 
 	## Overview
 

@@ -2,6 +2,7 @@
 /deno.lock
 /deleteme*
 /package.json
+/package-lock.json
 /node_modules
 /.npmrc
 /bun.lockb
