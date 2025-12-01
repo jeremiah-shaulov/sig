@@ -349,74 +349,76 @@ const enum Flags
 	@template T Type of the value stored in the signal.
  **/
 export class Sig<T>
-{	/** @internal */
+{	// symbol properties are private
+
+	/** @ignore */
 	[_id] = idEnum++;
 
-	/** @internal */
+	/** @ignore */
 	[_hasOnchangeVersion] = 0;
 
 	/**	Static value, Promise, Error, or computation function that produces the signal's value.
-		@internal
+		@ignore
 	 **/
 	[_compValue]: Value<T>|Promise<T>|CompValue<T>;
 
 	/**	Default value returned when signal is in error/promise state or uninitialized.
-		@internal
+		@ignore
 	 **/
 	[_defaultValue]: T;
 
 	/**	Optional setter called when setting a new value on a computed signal.
-		@internal
+		@ignore
 	 **/
 	[_setValue]: SetValue<unknown>|undefined;
 
 	/**	Optional callback to cancel ongoing async computations
-		@internal
+		@ignore
 	 **/
 	[_cancelComp]: CancelComp<unknown>|undefined;
 
 	/**	Whether the signal needs recomputation, and other internal state flags.
-		@internal
+		@ignore
 	 **/
 	[_flags]: Flags;
 
 	/**	Current value. If in promise state, this holds the last value or default. If in error state, holds the default value.
-		@internal
+		@ignore
 	 **/
 	[_value]: T;
 
 	/**	Active promise if the signal is in promise state, undefined otherwise.
-		@internal
+		@ignore
 	 **/
 	[_valuePromise]: Promise<T>|undefined;
 
 	/**	Error object if the signal is in error state, undefined otherwise.
-		@internal
+		@ignore
 	 **/
 	[_valueError]: Error|undefined;
 
 	/**	Weakly-referenced list of signals that depend on this signal.
 		When this signal changes, these dependent signals are marked for recomputation.
-		@internal
+		@ignore
 	 **/
 	[_dependOnMe] = new Map<number, {subj: WeakRef<Sig<unknown>>, compType: CompType}>;
 
 	/**	Signals that this signal depends on, along with what aspects (value/promise/error) were observed.
 		When a dependency changes, we check if the observed aspect changed to determine if recomputation is needed.
-		@internal
+		@ignore
 	 **/
 	[_iDependOn] = new Array<Sig<Any>>;
 
 	/**	Callbacks to invoke when the signal's value changes.
-		@internal
+		@ignore
 	 **/
 	[_onChangeCallbacks] = new Array<OnChange<unknown>|WeakRef<OnChange<unknown>>>;
 
-	/** @internal */
+	/** @ignore */
 	[_this]: ThisSig<T>|undefined;
 
 	/**	If this signal represents a property of another signal, reference to the parent.
-		@internal
+		@ignore
 	 **/
 	[_propOfSignal]: {holder: Sig<Any>, path: Array<string|symbol>} | undefined;
 
@@ -431,7 +433,7 @@ export class Sig<T>
 
 	/**	If this Sig is wrapped in a Proxy (as returned by `mySig.this`), returns the underlying Sig.
 		The actual unwrap happens in the Proxy handler, when it accesses any property existing on the Sig.
-		@internal
+		@ignore
 	 **/
 	get [_unwrap]()
 	{	return this;
