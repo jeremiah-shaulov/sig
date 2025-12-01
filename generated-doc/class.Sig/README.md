@@ -184,10 +184,6 @@ Calling methods through `mut` triggers change notifications after the method com
 If the method was asynchronous (returns a Promise), the notification is triggered after it resolves.
 For rejected Promises, no notification occurs.
 
-🎚️ Parameter **T**:
-
-Type of the value stored in the signal.
-
 ## This class has
 
 - [constructor](#-constructorcompvalue-valueorpromiset--compvaluet-defaultvalue-t-setvalue-setvaluet-cancelcomp-cancelcompt-iserrorsignal-boolean)
