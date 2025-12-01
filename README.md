@@ -1,6 +1,6 @@
 <!--
 	This file is generated with the following command:
-	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.2/README.md --importUrl=jsr:@shaulov/sig@0.0.2 mod.ts
+	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.3/README.md --importUrl=jsr:@shaulov/sig@0.0.3 mod.ts
 -->
 
 # sig - feature-rich multipurpose signals library
@@ -32,10 +32,10 @@ This signals implementation is unique. Here are it's main features:
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.2/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.3/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
 // deno run --allow-net /tmp/example-p9mn.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.2';
+import {sig} from 'jsr:@shaulov/sig@0.0.3';
 
 // Load data asynchronously
 const dataLoader = sig(fetch('https://example.com/').then(res => res.text()));
@@ -321,7 +321,7 @@ Pass a `WeakRef` to `subscribe()` for automatic cleanup when the referenced obje
 is garbage collected:
 
 ```ts
-import {sig, Sig} from 'jsr:@shaulov/sig@0.0.2';
+import {sig, Sig} from 'jsr:@shaulov/sig@0.0.3';
 
 const mySig = sig(42);
 
@@ -369,6 +369,46 @@ const computed = sig(() => useA.value ? sigA.value : sigB.value);
 
 Child signals hold weak references to parent computed signals, allowing parent signals
 to be garbage collected when no longer referenced elsewhere.
+
+This particularly means, that computed signals with subscribers will stop
+producing notifications, if the signal vanishes,
+and you should keep strong references to signals that you still need.
+
+The following example proves this.
+
+```ts
+import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.3';
+
+const sigA = sig(0);
+
+let sigB: Sig<string> | undefined = sig(() => `Value: ${sigA.value}`, '');
+sigB.subscribe
+(	function()
+	{	console.log(this.value);
+	}
+);
+
+// After 3 seconds, remove reference to sigB
+setTimeout
+(	() =>
+	{	sigB = undefined;
+
+		// Create memory pressure to encourage GC (works on most JS engines)
+		const waste: unknown[] = [];
+		for (let i=0; i<5000; i++)
+		{	waste.push(new Array(10000).fill(Math.random()));
+		}
+		waste.length = 0; // Release the waste
+	},
+	3000
+);
+
+// Increment sigA every second to trigger notifications
+const h = setInterval(() => sigA.value++, 1000);
+
+// Stop after 10 seconds
+setTimeout(() => clearInterval(h), 10_000);
+```
 
 ### Async Dependency Tracking
 
@@ -546,10 +586,10 @@ before storing it in the signal.
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.2/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
-// deno run --allow-net /tmp/example-65ya.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.3/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
+// deno run /tmp/example-65ya.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.2';
+import {sig} from 'jsr:@shaulov/sig@0.0.3';
 
 const sigA = sig(1);
 sigA.setConverter
@@ -591,7 +631,6 @@ Here are properties and methods of the [Sig](generated-doc/class.Sig/README.md) 
 > &nbsp; &nbsp; ⚙ [convert](generated-doc/class.Sig/README.md#-convertvcompvalue-value-t--valueorpromisev-sigv)\<V, D=V>(compValue: (value: T) => [ValueOrPromise](generated-doc/private.type.ValueOrPromise/README.md)\<V>, defaultValue: D, setValue?: [SetValue](generated-doc/private.type.SetValue/README.md)\<V | D>, cancelComp?: [CancelComp](generated-doc/private.type.CancelComp/README.md)\<V | D>): [Sig](generated-doc/class.Sig/README.md)\<D `extends` V ? V : V | D><br>
 > &nbsp; &nbsp; ⚙ [convert](generated-doc/class.Sig/README.md#-convertvcompvalue-value-t--valueorpromisev-sigv)\<V>(compValue: (value: T) => [ValueOrPromise](generated-doc/private.type.ValueOrPromise/README.md)\<V>): [Sig](generated-doc/class.Sig/README.md)\<V><br>
 > &nbsp; &nbsp; ⚙ [setConverter](generated-doc/class.Sig/README.md#-setconvertercompvalue-value-t--valueorpromiset-void)(compValue: (value: T) => [ValueOrPromise](generated-doc/private.type.ValueOrPromise/README.md)\<T>): `void`<br>
-> &nbsp; &nbsp; ⚙ [inc](generated-doc/class.Sig/README.md#-inc-t)(): T<br>
 > &nbsp; &nbsp; ⚙ [subscribe](generated-doc/class.Sig/README.md#-subscribecallback-onchanget--weakrefonchanget-void)(callback: [OnChange](generated-doc/private.type.OnChange/README.md)\<T> | WeakRef\<[OnChange](generated-doc/private.type.OnChange/README.md)\<T>>): `void`<br>
 > &nbsp; &nbsp; ⚙ [unsubscribe](generated-doc/class.Sig/README.md#-unsubscribecallback-onchanget--weakrefonchanget-void)(callback: [OnChange](generated-doc/private.type.OnChange/README.md)\<T> | WeakRef\<[OnChange](generated-doc/private.type.OnChange/README.md)\<T>>): `void`<br>
 > &nbsp; &nbsp; ⚙ [toJSON](generated-doc/class.Sig/README.md#-tojson-t)(): T<br>
@@ -603,3 +642,4 @@ Here are properties and methods of the [Sig](generated-doc/class.Sig/README.md) 
 - [Sig](generated-doc/class.Sig/README.md) signal class.
 - [sig()](generated-doc/function.sig/README.md) factory function to create signals.
 - [batch()](generated-doc/function.batch/README.md) function to batch changes.
+- [\_deepEquals()](generated-doc/function._deepEquals/README.md) function that this module uses internally for deep equality checks.

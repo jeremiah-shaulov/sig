@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.2"
+import {Sig} from "jsr:@shaulov/sig@0.0.3"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
@@ -199,12 +199,11 @@ Type of the value stored in the signal.
 [busy](#-get-busy-sigboolean),
 [error](#-get-error-sigerror),
 [default](#-get-default-t)
-- 9 methods:
+- 8 methods:
 [set](#-setcompvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-void),
 [convert](#-convertv-dvcompvalue-value-t--valueorpromisev-defaultvalue-d-setvalue-setvaluev--d-cancelcomp-cancelcompv--d-sigd-extends-v--v--v--d),
 [convert](#-convertvcompvalue-value-t--valueorpromisev-sigv),
 [setConverter](#-setconvertercompvalue-value-t--valueorpromiset-void),
-[inc](#-inc-t),
 [subscribe](#-subscribecallback-onchanget--weakrefonchanget-void),
 [unsubscribe](#-unsubscribecallback-onchanget--weakrefonchanget-void),
 [toJSON](#-tojson-t),
@@ -390,14 +389,6 @@ Type of the value stored in the signal.
 > sigA.value = -15;
 > console.log(sigA.value); // -15
 > ```
-
-
-
-#### ⚙ inc(): T
-
-> Increments the signal's numeric value by one.
-> Works with number or bigint types on static signals or computed signals with setters.
-> Returns the new value, or `undefined` if the value is not numeric.
 
 
 
