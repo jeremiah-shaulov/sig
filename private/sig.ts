@@ -353,7 +353,7 @@ export class Sig<T>
 	/**	Static value, Promise, Error, or computation function that produces the signal's value.
 		@internal
 	 **/
-	[_compValue]: T|Promise<T>|Error|CompValue<T>;
+	[_compValue]: Value<T>|Promise<T>|CompValue<T>;
 
 	/**	Default value returned when signal is in error/promise state or uninitialized.
 		@internal
@@ -416,7 +416,7 @@ export class Sig<T>
 	[_propOfSignal]: {holder: Sig<Any>, path: Array<string|symbol>} | undefined;
 
 	constructor(compValue: ValueOrPromise<T>|CompValue<T>, defaultValue: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>, isErrorSignal?: boolean)
-	{	this[_compValue] = unwrapSig(compValue);
+	{	this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
 		this[_defaultValue] = defaultValue;
 		this[_setValue] = setValue as SetValue<unknown>;
 		this[_cancelComp] = cancelComp as CancelComp<unknown>|undefined;
@@ -470,8 +470,8 @@ export class Sig<T>
 			if (this[_valuePromise])
 			{	this[_cancelComp]?.(this[_valuePromise]);
 			}
-			this[_compValue] = unwrapSig(compValue);
-			this[_cancelComp] = typeof(this[_compValue])=='function' ? cancelComp as CancelComp<unknown> : undefined;
+			this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
+			this[_cancelComp] = typeof(compValue)=='function' && !(compValue instanceof Sig) ? cancelComp as CancelComp<unknown> : undefined;
 			this[_flags] = Flags.WantRecomp | (this[_flags] & Flags.IsErrorSignal);
 			recomp(this, CompType.None, undefined, true) && flushPendingOnChange();
 		}
@@ -701,7 +701,7 @@ export class Sig<T>
 		Returns the new value, or `undefined` if the value is not numeric.
 	 **/
 	inc(): T|undefined
-	{	if (typeof(this[_compValue])!='function' || this[_setValue])
+	{	if (typeof(this[_compValue])!='function' && !(this[_compValue] instanceof Sig) || this[_setValue])
 		{	recomp(this, CompType.Value);
 			let value = this[_value];
 			if (typeof(value)=='number' || typeof(value)=='bigint')
@@ -806,14 +806,14 @@ function recomp<T>(that: Sig<T>, compType: CompType, cause?: Sig<unknown>, noCan
 		removeMyselfAsDepFromUsedSignals(that);
 		// 2. Call `compValue`
 		const compValue = that[_compValue];
-		if (typeof(compValue) == 'function')
+		if (typeof(compValue)=='function' || compValue instanceof Sig)
 		{	const prevEvalContext = evalContext;
 			evalContext = that as Sig<unknown>;
 			try
 			{	if (!noCancelComp && that[_valuePromise])
 				{	that[_cancelComp]?.(that[_valuePromise]);
 				}
-				const result = (compValue as CompValue<T>)(() => sigSync(that), cause);
+				const result = compValue instanceof Sig ? compValue : (compValue as CompValue<T>)(() => sigSync(that), cause);
 				newValue = result instanceof Sig ? result.promise ?? sigError(result[_unwrap]) ?? result.value : convPromise(result);
 			}
 			catch (e)
@@ -958,7 +958,7 @@ function hasOnchange<T>(that: Sig<T>): boolean
 	);
 }
 
-function convPromise<T>(compValue: T|Promise<Value<T>>|Error): T|Promise<T>|Error
+function convPromise<V, T>(compValue: V|Promise<Value<T>>): V|Promise<T>
 {	return !(compValue instanceof Promise) ? compValue : compValue.then
 	(	r =>
 		{	const result = r instanceof Sig ? r.promise ?? sigError(r[_unwrap]) ?? r.value : r;
@@ -1106,21 +1106,6 @@ export function sig<T>(compValue?: ValueOrPromise<T>|CompValue<T>, defaultValue?
 		setValue,
 		cancelComp
 	) as Any;
-}
-
-/**	Converts a Sig into a computation function for uniform handling.
-	When a signal is passed to `sig()`, it's wrapped in a function that returns it,
-	creating a computed signal that derives from the underlying signal.
-
-	@param compValue Value, Promise, Error, computation function, or Sig.
-	@returns Input unchanged unless it's a Sig, then returns a function returning the signal.
- **/
-function unwrapSig<T>(compValue: ValueOrPromise<T>|CompValue<T>)
-{	if (compValue instanceof Sig)
-	{	const underlyingSignal = compValue;
-		compValue = () => underlyingSignal;
-	}
-	return compValue as T|Error|CompValue<T>;
 }
 
 function followPath(obj: Any, path: Array<string|symbol>, pathLen: number)
