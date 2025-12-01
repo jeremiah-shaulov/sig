@@ -394,7 +394,7 @@
 	);
 
 	// Increment sigA every second to trigger notifications
-	const h = setInterval(() => sigA.inc(), 1000);
+	const h = setInterval(() => sigA.value++, 1000);
 
 	// Stop after 10 seconds
 	setTimeout(() => clearInterval(h), 10_000);

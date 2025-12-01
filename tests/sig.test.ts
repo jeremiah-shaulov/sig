@@ -238,7 +238,7 @@ Deno.test
 
 		// Set `cnt`
 
-		cnt.inc();
+		cnt.value++;
 		assertEquals(calc, []);
 		assertEquals(changes, ['cnt']);
 		changes.length = 0;
@@ -262,7 +262,7 @@ Deno.test
 
 		// Set `cnt`
 
-		cnt.inc();
+		cnt.value++;
 		assertEquals(calc, ['cntIfEnabled', 'cntIfEnabledWithTitle']);
 		assertEquals(changes, ['cnt', 'cntIfEnabled', 'cntIfEnabledWithTitle']);
 		calc.length = 0;
@@ -2269,116 +2269,6 @@ Deno.test
 		changes.length = 0;
 		assertEquals(sig3.value, 30);
 		assertEquals(sig1.value, 20); // sig1 unchanged
-	}
-);
-
-Deno.test
-(	'inc() method',
-	() =>
-	{	const changes = new Array<string>;
-
-		// Test with number
-		const num = sig(5, undefined);
-		num.subscribe(() => changes.push('num'));
-		assertEquals(changes, ['num']);
-		changes.length = 0;
-
-		assertEquals(num.inc(), 6);
-		assertEquals(changes, ['num']);
-		changes.length = 0;
-		assertEquals(num.value, 6);
-
-		// Test with bigint
-		const bigNum = sig(10n, undefined);
-		bigNum.subscribe(() => changes.push('bigNum'));
-		assertEquals(changes, ['bigNum']);
-		changes.length = 0;
-
-		assertEquals(bigNum.inc(), 11n);
-		assertEquals(changes, ['bigNum']);
-		changes.length = 0;
-		assertEquals(bigNum.value, 11n);
-
-		// Test with non-numeric value (should not change)
-		const str = sig('hello', undefined);
-		str.subscribe(() => changes.push('str'));
-		assertEquals(changes, ['str']);
-		changes.length = 0;
-
-		assertEquals(str.inc(), undefined);
-		assertEquals(changes, []); // Should not trigger change
-		assertEquals(str.value, 'hello');
-	}
-);
-
-Deno.test
-(	'inc() with Error and Promise states',
-	async () =>
-	{	const changes = new Array<string>;
-
-		// Test inc() on error signal
-		const errorSig = sig<number|undefined>(new Error('Error'));
-		errorSig.subscribe(() => changes.push('errorSig'));
-		assertEquals(changes, ['errorSig']);
-		changes.length = 0;
-
-		const result1 = errorSig.inc();
-		assertEquals(result1===undefined, true);
-		assertEquals(changes, []); // No change
-		assertEquals(errorSig.error.value?.message, 'Error');
-
-		// Test inc() on promise signal
-		let resolver: (value: number) => void;
-		const promise = new Promise<number>(y => resolver = y);
-		let cnt = 10;
-		const promiseSig = sig(() => promise, 5, v => {cnt = v});
-		promiseSig.subscribe(() => changes.push('promiseSig'));
-		assertEquals(changes, ['promiseSig']);
-		changes.length = 0;
-
-		// When in promise state, #value holds the default (5)
-		// inc() checks if #value is numeric and increments it
-		const result2 = promiseSig.inc();
-		assertEquals(result2, 6); // inc() sees default value 5, increments to 6
-		assertEquals(changes, []); // No onChange - still in promise state with same promise
-
-		// Resolve promise
-		resolver!(cnt);
-		await promise;
-		await new Promise(y => setTimeout(y, 0));
-
-		assertEquals(changes, ['promiseSig']);
-		changes.length = 0;
-
-		// Now inc() should work
-		const result3 = promiseSig.inc();
-		assertEquals(result3, 7);
-		assertEquals(changes, ['promiseSig']);
-	}
-);
-
-Deno.test
-(	'inc() on non-numeric computed signal',
-	() =>
-	{	let backingValue: string|number|undefined = 'hello';
-
-		const sigA = sig
-		(	() => backingValue,
-			undefined,
-			newValue => {if (newValue !== undefined) backingValue = newValue}
-		);
-
-		sigA.subscribe(() => {});
-
-		// Try inc() on string value
-		const result1 = sigA.inc();
-		assertEquals(result1, undefined); // Returns undefined for non-numeric
-
-		// Change to number
-		sigA.set(10);
-		const result2 = sigA.inc();
-		assertEquals(result2, 11);
-		assertEquals(sigA.value, 11);
 	}
 );
 

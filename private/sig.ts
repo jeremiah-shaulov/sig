@@ -701,22 +701,6 @@ export class Sig<T>
 		this[_flags] = Flags.WantRecomp | (this[_flags] & Flags.IsErrorSignal);
 	}
 
-	/**	Increments the signal's numeric value by one.
-		Works with number or bigint types on static signals or computed signals with setters.
-		Returns the new value, or `undefined` if the value is not numeric.
-	 **/
-	inc(): T|undefined
-	{	if (typeof(this[_compValue])!='function' && !(this[_compValue] instanceof Sig) || this[_setValue])
-		{	recomp(this, CompType.Value);
-			let value = this[_value];
-			if (typeof(value)=='number' || typeof(value)=='bigint')
-			{	value++;
-				this.set(value);
-				return value;
-			}
-		}
-	}
-
 	/**	Registers a callback invoked when the signal's value changes.
 
 		Signals normally compute lazily. Adding a listener makes the signal actively
