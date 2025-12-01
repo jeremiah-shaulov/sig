@@ -738,16 +738,16 @@ export class Sig<T>
 	}
 
 	/**	Automatic conversion to string.
-		Returns computation function converted to string, or value for non-computed signals.
+		Returns word "Sig" with appended computation function converted to string, or value for non-computed signals.
 	 **/
 	[Symbol.toPrimitive]()
-	{	return this[_compValue]+'';
+	{	return `Sig ${this[_compValue]}`;
 	}
 
 	/**	For `JSON.stringify()`.
 		Returns the current value of the signal (`this.value`).
 	 **/
-	toJSON(): T
+	toJSON()
 	{	return this.value;
 	}
 }
