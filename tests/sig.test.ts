@@ -1328,8 +1328,8 @@ Deno.test
 		const computed = sig(() => 100);
 
 		// Test string coercion
-		assertEquals(`Value: ${num}`, 'Value: 42');
-		assertEquals(`Message: ${str}`, 'Message: hello');
+		assertEquals(`Value: ${num}`, 'Value: Sig 42');
+		assertEquals(`Message: ${str}`, 'Message: Sig hello');
 		// The computed function may have different whitespace formatting
 		const computedStr = `${computed}`;
 		assertEquals(computedStr.includes('100'), true);
