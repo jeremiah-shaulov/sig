@@ -1,8 +1,8 @@
 import {deepEquals} from './deep_equals.ts';
-import {traverseWeak} from './traverse_weak.ts';
 import type {ThisSig} from './this_sig.ts';
 
 const _id = Symbol();
+const _hasOnchangeVersion = Symbol();
 const _compValue = Symbol();
 const _defaultValue = Symbol();
 const _setValue = Symbol();
@@ -42,6 +42,8 @@ const pendingRecomp = new Array<{subj: Sig<unknown>, cause: Sig<Any>}>;
 let batchLevel = 0;
 
 let idEnum = 0;
+
+let hasOnchangeVersion = 1;
 
 // deno-lint-ignore no-explicit-any
 type Any = any;
@@ -349,6 +351,9 @@ const enum Flags
 export class Sig<T>
 {	/** @internal */
 	[_id] = idEnum++;
+
+	/** @internal */
+	[_hasOnchangeVersion] = 0;
 
 	/**	Static value, Promise, Error, or computation function that produces the signal's value.
 		@internal
@@ -727,6 +732,7 @@ export class Sig<T>
 		const callbackFunc = callback instanceof WeakRef ? callback.deref() : callback;
 		if (!traverseWeak(onChangeCallbacks).some(c => c == callbackFunc))
 		{	onChangeCallbacks.push(callback as Any);
+			hasOnchangeVersion++;
 			recomp(this, CompType.None) && flushPendingOnChange(); // this is needed if computation never called for this signal, to record dependencies
 		}
 	}
@@ -741,6 +747,7 @@ export class Sig<T>
 			if (cb instanceof WeakRef ? cb.deref()==callbackFunc : cb==callbackFunc)
 			{	onChangeCallbacks[i] = onChangeCallbacks[onChangeCallbacks.length - 1];
 				onChangeCallbacks.length--;
+				hasOnchangeVersion++;
 				break;
 			}
 		}
@@ -947,15 +954,16 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 }
 
 function hasOnchange<T>(that: Sig<T>): boolean
-{	if (that[_onChangeCallbacks].length)
-	{	return true;
+{	if (Math.abs(that[_hasOnchangeVersion]) != hasOnchangeVersion)
+	{	const yes = that[_onChangeCallbacks].length!=0 || that[_dependOnMe].values().some
+		(	depRef =>
+			{	const dep = depRef.subj.deref();
+				return dep && hasOnchange(dep);
+			}
+		);
+		that[_hasOnchangeVersion] = yes ? hasOnchangeVersion : -hasOnchangeVersion;
 	}
-	return that[_dependOnMe].values().some
-	(	depRef =>
-		{	const dep = depRef.subj.deref();
-			return dep && hasOnchange(dep);
-		}
-	);
+	return that[_hasOnchangeVersion] > 0;
 }
 
 function convPromise<V, T>(compValue: V|Promise<Value<T>>): V|Promise<T>
@@ -1116,6 +1124,21 @@ function followPath(obj: Any, path: Array<string|symbol>, pathLen: number)
 		obj = obj[path[i]];
 	}
 	return obj;
+}
+
+function *traverseWeak<T extends object>(items: Array<T|WeakRef<T>>)
+{	for (let i=items.length; --i>=0;)
+	{	const itemOrRef = items[i];
+		const item = itemOrRef instanceof WeakRef ? itemOrRef.deref() : itemOrRef;
+		if (!item)
+		{	items[i] = items[items.length - 1];
+			items.length--;
+			hasOnchangeVersion++;
+		}
+		else
+		{	yield item;
+		}
+	}
 }
 
 /**	Batches multiple signal updates into a single change cycle.
