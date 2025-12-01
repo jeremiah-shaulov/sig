@@ -418,7 +418,7 @@ export class Sig<T>
 	constructor(compValue: ValueOrPromise<T>|CompValue<T>, defaultValue: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>, isErrorSignal?: boolean)
 	{	this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
 		this[_defaultValue] = defaultValue;
-		this[_setValue] = setValue as SetValue<unknown>;
+		this[_setValue] = typeof(compValue)=='function' && !(compValue instanceof Sig) ? setValue as SetValue<unknown> : undefined;
 		this[_cancelComp] = cancelComp as CancelComp<unknown>|undefined;
 		this[_flags] = Flags.WantRecomp | (isErrorSignal ? Flags.IsErrorSignal : 0);
 		this[_value] = defaultValue;
