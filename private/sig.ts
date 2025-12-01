@@ -1,6 +1,6 @@
 import {deepEquals} from './deep_equals.ts';
 import {traverseWeak} from './traverse_weak.ts';
-import {ThisSig} from './this_sig.ts';
+import type {ThisSig} from './this_sig.ts';
 
 const _id = Symbol();
 const _compValue = Symbol();
