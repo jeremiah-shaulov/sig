@@ -346,7 +346,7 @@ const enum Flags
 	If the method was asynchronous (returns a Promise), the notification is triggered after it resolves.
 	For rejected Promises, no notification occurs.
 
-	@param T Type of the value stored in the signal.
+	@template T Type of the value stored in the signal.
  **/
 export class Sig<T>
 {	/** @internal */
