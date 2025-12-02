@@ -1,6 +1,6 @@
 <!--
 	This file is generated with the following command:
-	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.4/README.md --importUrl=jsr:@shaulov/sig@0.0.4 mod.ts
+	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.5/README.md --importUrl=jsr:@shaulov/sig@0.0.5 mod.ts
 -->
 
 # sig - feature-rich multipurpose signals library
@@ -33,10 +33,10 @@ This signals implementation is unique. Here are it's main features:
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.4/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.5/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
 // deno run --allow-net /tmp/example-p9mn.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.4';
+import {sig} from 'jsr:@shaulov/sig@0.0.5';
 
 // Load data asynchronously
 const dataLoader = sig(fetch('https://example.com/').then(res => res.text()));
@@ -322,7 +322,7 @@ Pass a `WeakRef` to `subscribe()` for automatic cleanup when the referenced obje
 is garbage collected:
 
 ```ts
-import {sig, Sig} from 'jsr:@shaulov/sig@0.0.4';
+import {sig, Sig} from 'jsr:@shaulov/sig@0.0.5';
 
 const mySig = sig(42);
 
@@ -378,7 +378,7 @@ and you should keep strong references to signals that you still need.
 The following example proves this.
 
 ```ts
-import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.4';
+import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.5';
 
 const sigA = sig(0);
 
@@ -439,10 +439,10 @@ The latter is a signal that caused the recomputation, or `undefined` if this is 
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.4/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.5/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
 // deno run /tmp/example-65ya.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.4';
+import {sig} from 'jsr:@shaulov/sig@0.0.5';
 import {assertEquals} from 'jsr:@std/assert@1.0.16/equals';
 
 const sigA = sig(1);
@@ -629,10 +629,10 @@ before storing it in the signal.
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.4/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-pf4z>/' > /tmp/example-pf4z.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.5/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-pf4z>/' > /tmp/example-pf4z.ts
 // deno run /tmp/example-pf4z.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.4';
+import {sig} from 'jsr:@shaulov/sig@0.0.5';
 
 const sigA = sig(1);
 sigA.setConverter
