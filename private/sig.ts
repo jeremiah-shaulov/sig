@@ -5,18 +5,15 @@ const _id = Symbol();
 const _hasOnchangeVersion = Symbol();
 const _compValue = Symbol();
 const _defaultValue = Symbol();
-const _setValue = Symbol();
-const _cancelComp = Symbol();
 const _flags = Symbol();
-const _onChangeCallbacks = Symbol();
-const _unwrap = Symbol();
 const _value = Symbol();
 const _valuePromise = Symbol();
 const _valueError = Symbol();
 const _dependOnMe = Symbol();
 const _iDependOn = Symbol();
-const _this = Symbol();
-const _propOfSignal = Symbol();
+const _onChangeCallbacks = Symbol();
+const _optionalFields = Symbol();
+const _unwrap = Symbol();
 
 /**	The currently evaluating signal, used to track dependencies during computation.
 
@@ -166,6 +163,28 @@ const enum Flags
 
 	// Signal type:
 	IsErrorSignal = 4,	    // Signal treats Error as a value
+}
+
+class OptionalFields<T>
+{	/**	Optional setter called when setting a new value on a computed signal.
+	 **/
+	setValue: SetValue<unknown> | undefined;
+
+	/**	Optional callback to cancel ongoing async computations
+	 **/
+	cancelComp: CancelComp<unknown> | undefined;
+
+	/**	Cached proxy-wrapped version of this signal providing the `ThisSig` interface.
+	 **/
+	this: ThisSig<T> | undefined;
+
+	/**	If this signal represents a property of another signal, reference to the parent.
+	 **/
+	propOfSignal: Sig<Any> | undefined;
+
+	/**	Path to follow from the parent signal (`propOfSignal`) to reach this property.
+	 **/
+	propOfSignalPath: Array<string|symbol> | undefined;
 }
 
 /**	Type returned by the {@link sig()} function.
@@ -367,16 +386,6 @@ export class Sig<T>
 	 **/
 	[_defaultValue]: T;
 
-	/**	Optional setter called when setting a new value on a computed signal.
-		@ignore
-	 **/
-	[_setValue]: SetValue<unknown>|undefined;
-
-	/**	Optional callback to cancel ongoing async computations
-		@ignore
-	 **/
-	[_cancelComp]: CancelComp<unknown>|undefined;
-
 	/**	Whether the signal needs recomputation, and other internal state flags.
 		@ignore
 	 **/
@@ -390,45 +399,46 @@ export class Sig<T>
 	/**	Active promise if the signal is in promise state, undefined otherwise.
 		@ignore
 	 **/
-	[_valuePromise]: Promise<T>|undefined;
+	[_valuePromise]: Promise<T> | undefined;
 
 	/**	Error object if the signal is in error state, undefined otherwise.
 		@ignore
 	 **/
-	[_valueError]: Error|undefined;
+	[_valueError]: Error | undefined;
 
 	/**	Weakly-referenced list of signals that depend on this signal.
 		When this signal changes, these dependent signals are marked for recomputation.
 		@ignore
 	 **/
-	[_dependOnMe] = new Map<number, {subj: WeakRef<Sig<unknown>>, compType: CompType}>;
+	[_dependOnMe]: Map<number, {subj: WeakRef<Sig<unknown>>, compType: CompType}> | undefined;
 
 	/**	Signals that this signal depends on, along with what aspects (value/promise/error) were observed.
 		When a dependency changes, we check if the observed aspect changed to determine if recomputation is needed.
 		@ignore
 	 **/
-	[_iDependOn] = new Array<Sig<Any>>;
+	[_iDependOn]: Sig<Any>[] | undefined;
 
 	/**	Callbacks to invoke when the signal's value changes.
 		@ignore
 	 **/
-	[_onChangeCallbacks] = new Array<OnChange<unknown>|WeakRef<OnChange<unknown>>>;
+	[_onChangeCallbacks]: Array<OnChange<unknown> | WeakRef<OnChange<unknown>>> | undefined;
 
-	/** @ignore */
-	[_this]: ThisSig<T>|undefined;
-
-	/**	If this signal represents a property of another signal, reference to the parent.
+	/**	Optional fields.
 		@ignore
 	 **/
-	[_propOfSignal]: {holder: Sig<Any>, path: Array<string|symbol>} | undefined;
+	[_optionalFields]: OptionalFields<T> | undefined;
 
 	constructor(compValue: ValueOrPromise<T>|CompValue<T>, defaultValue: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>, isErrorSignal?: boolean)
 	{	this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
 		this[_defaultValue] = defaultValue;
-		this[_setValue] = typeof(compValue)=='function' && !(compValue instanceof Sig) ? setValue as SetValue<unknown> : undefined;
-		this[_cancelComp] = cancelComp as CancelComp<unknown>|undefined;
 		this[_flags] = Flags.WantRecomp | (isErrorSignal ? Flags.IsErrorSignal : 0);
 		this[_value] = defaultValue;
+		const useSetValue = typeof(compValue)=='function' && !(compValue instanceof Sig) ? setValue as SetValue<unknown> : undefined;
+		if (useSetValue || cancelComp)
+		{	this[_optionalFields] = new OptionalFields<T>;
+			this[_optionalFields].setValue = useSetValue;
+			this[_optionalFields].cancelComp = cancelComp as CancelComp<unknown>|undefined;
+		}
 	}
 
 	/**	If this Sig is wrapped in a Proxy (as returned by `mySig.this`), returns the underlying Sig.
@@ -466,7 +476,7 @@ export class Sig<T>
 		@param cancelComp Optional callback to cancel an ongoing async computation when replaced.
 	 **/
 	set(compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>)
-	{	if (this[_setValue])
+	{	if (this[_optionalFields]?.setValue)
 		{	if (typeof(compValue)=='function' || compValue instanceof Sig)
 			{	throw new Error('Cannot override computation function for signals with value setters');
 			}
@@ -475,10 +485,16 @@ export class Sig<T>
 		else
 		{	// Cancel the current computation with the OLD cancelComp before replacing it
 			if (this[_valuePromise])
-			{	this[_cancelComp]?.(this[_valuePromise]);
+			{	this[_optionalFields]?.cancelComp?.(this[_valuePromise]);
 			}
 			this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
-			this[_cancelComp] = typeof(compValue)=='function' && !(compValue instanceof Sig) ? cancelComp as CancelComp<unknown> : undefined;
+			if (typeof(compValue)=='function' && !(compValue instanceof Sig))
+			{	this[_optionalFields] ??= new OptionalFields<T>;
+				this[_optionalFields].cancelComp = cancelComp as CancelComp<unknown>;
+			}
+			else if (this[_optionalFields])
+			{	this[_optionalFields].cancelComp = undefined;
+			}
 			this[_flags] = Flags.WantRecomp | (this[_flags] & Flags.IsErrorSignal);
 			recomp(this, CompType.None, undefined, true) && flushPendingOnChange();
 		}
@@ -489,9 +505,10 @@ export class Sig<T>
 		Property accesses are cached.
 	**/
 	get this(): ThisSig<T>
-	{	if (!this[_this])
+	{	if (!this[_optionalFields]?.this)
 		{	const propsCache = new Map<string|symbol, WeakRef<Sig<unknown>>>;
-			this[_this] ??= new Proxy
+			this[_optionalFields] ??= new OptionalFields<T>;
+			this[_optionalFields].this ??= new Proxy
 			(	sig,
 				{	apply: (_target, _thisArg: unknown, args: unknown[]) => sigApply(this, args),
 
@@ -521,7 +538,7 @@ export class Sig<T>
 				}
 			) as Any as ThisSig<T>;
 		}
-		return this[_this];
+		return this[_optionalFields].this;
 	}
 
 	/**	Provides access to mutable methods that trigger change notifications.
@@ -696,10 +713,11 @@ export class Sig<T>
 		```
 	 **/
 	setConverter(compValue: (value: T) => ValueOrPromise<T>)
-	{	const vh = new Sig(this[_compValue], this[_defaultValue], undefined, this[_cancelComp])
+	{	const vh = new Sig(this[_compValue], this[_defaultValue], undefined, this[_optionalFields]?.cancelComp)
 		this[_compValue] = () => sigConvert(vh, compValue);
-		this[_setValue] = ((newValue: T) => vh.set(newValue)) as SetValue<unknown>;
-		this[_cancelComp] = undefined;
+		this[_optionalFields] ??= new OptionalFields<T>;
+		this[_optionalFields].setValue = ((newValue: T) => vh.set(newValue)) as SetValue<unknown>;
+		this[_optionalFields].cancelComp = undefined;
 		this[_flags] = Flags.WantRecomp | (this[_flags] & Flags.IsErrorSignal);
 	}
 
@@ -715,26 +733,34 @@ export class Sig<T>
 	 **/
 	subscribe(callback: OnChange<T>|WeakRef<OnChange<T>>)
 	{	const onChangeCallbacks = this[_onChangeCallbacks];
-		const callbackFunc = callback instanceof WeakRef ? callback.deref() : callback;
-		if (!traverseWeak(onChangeCallbacks).some(c => c == callbackFunc))
-		{	onChangeCallbacks.push(callback as Any);
-			hasOnchangeVersion++;
-			recomp(this, CompType.None) && flushPendingOnChange(); // this is needed if computation never called for this signal, to record dependencies
+		if (onChangeCallbacks)
+		{	const callbackFunc = callback instanceof WeakRef ? callback.deref() : callback;
+			if (traverseWeak(onChangeCallbacks).some(c => c == callbackFunc))
+			{	return;
+			}
+			onChangeCallbacks.push(callback as Any);
 		}
+		else
+		{	this[_onChangeCallbacks] = [callback as Any];
+		}
+		hasOnchangeVersion++;
+		recomp(this, CompType.None) && flushPendingOnChange(); // this is needed if computation never called for this signal, to record dependencies
 	}
 
 	/**	Removes a previously added onChange listener.
 	 **/
 	unsubscribe(callback: OnChange<T>|WeakRef<OnChange<T>>)
 	{	const onChangeCallbacks = this[_onChangeCallbacks];
-		const callbackFunc = callback instanceof WeakRef ? callback.deref() : callback;
-		for (let i=0; i<onChangeCallbacks.length; i++)
-		{	const cb = onChangeCallbacks[i];
-			if (cb instanceof WeakRef ? cb.deref()==callbackFunc : cb==callbackFunc)
-			{	onChangeCallbacks[i] = onChangeCallbacks[onChangeCallbacks.length - 1];
-				onChangeCallbacks.length--;
-				hasOnchangeVersion++;
-				break;
+		if (onChangeCallbacks)
+		{	const callbackFunc = callback instanceof WeakRef ? callback.deref() : callback;
+			for (let i=0; i<onChangeCallbacks.length; i++)
+			{	const cb = onChangeCallbacks[i];
+				if (cb instanceof WeakRef ? cb.deref()==callbackFunc : cb==callbackFunc)
+				{	onChangeCallbacks[i] = onChangeCallbacks[onChangeCallbacks.length - 1];
+					onChangeCallbacks.length--;
+					hasOnchangeVersion++;
+					break;
+				}
 			}
 		}
 	}
@@ -756,14 +782,16 @@ export class Sig<T>
 
 function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 {	if (compType && evalContext)
-	{	const depRef = that[_dependOnMe].get(evalContext[_id]);
+	{	const depRef = that[_dependOnMe]?.get(evalContext[_id]);
 		if (!depRef)
 		{	if (checkCircular(that, evalContext))
 			{	throw new Error('Circular dependency detected between signals');
 			}
+			that[_dependOnMe] ??= new Map;
 			that[_dependOnMe].set(evalContext[_id], {subj: new WeakRef(evalContext), compType});
-			if (!evalContext[_iDependOn].includes(that))
-			{	evalContext[_iDependOn].push(that);
+			if (!evalContext[_iDependOn]?.includes(that))
+			{	evalContext[_iDependOn] ??= [];
+				evalContext[_iDependOn].push(that);
 			}
 		}
 		else
@@ -772,7 +800,7 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 	}
 }
 
-function checkCircular<T>(that: Sig<T>, target: Sig<Any>, visited=new Set<Sig<Any>>): boolean
+function checkCircular<T>(that: Sig<T>, target: Sig<Any>, visited=new Set<Sig<Any>>): boolean|undefined
 {	if (that == target)
 	{	return true;
 	}
@@ -780,14 +808,16 @@ function checkCircular<T>(that: Sig<T>, target: Sig<Any>, visited=new Set<Sig<An
 	{	return false;
 	}
 	visited.add(that);
-	return that[_iDependOn].some(dep => checkCircular(dep, target, visited));
+	return that[_iDependOn]?.some(dep => checkCircular(dep, target, visited));
 }
 
 function removeMyselfAsDepFromUsedSignals<T>(that: Sig<T>)
-{	for (const usedSig of that[_iDependOn])
-	{	usedSig[_dependOnMe].delete(that[_id]);
+{	if (that[_iDependOn])
+	{	for (const usedSig of that[_iDependOn])
+		{	usedSig[_dependOnMe]?.delete(that[_id]);
+		}
+		that[_iDependOn].length = 0;
 	}
-	that[_iDependOn].length = 0;
 }
 
 function recomp<T>(that: Sig<T>, compType: CompType, cause?: Sig<unknown>, noCancelComp=false): CompType
@@ -804,7 +834,7 @@ function recomp<T>(that: Sig<T>, compType: CompType, cause?: Sig<unknown>, noCan
 			evalContext = that as Sig<unknown>;
 			try
 			{	if (!noCancelComp && that[_valuePromise])
-				{	that[_cancelComp]?.(that[_valuePromise]);
+				{	that[_optionalFields]?.cancelComp?.(that[_valuePromise]);
 				}
 				const result = compValue instanceof Sig ? compValue : (compValue as CompValue<T>)(() => sigSync(that), cause);
 				newValue = result instanceof Sig ? result.promise ?? sigError(result[_unwrap]) ?? result.value : convPromise(result);
@@ -867,7 +897,7 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, ofValuePromis
 		{	let newError = !(that[_flags] & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
 			if (bySetter && !newError)
 			{	try
-				{	that[_setValue]!(newValue);
+				{	that[_optionalFields]?.setValue?.(newValue);
 					that[_flags] = Flags.WantRecomp | (that[_flags] & Flags.IsErrorSignal);
 					return recomp(that, CompType.None);
 				}
@@ -915,24 +945,29 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, ofValuePromis
 }
 
 function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValue?: T|Error, knownToBeChanged=false)
-{	for (const callback of traverseWeak(that[_onChangeCallbacks]))
-	{	if (!pendingOnChange.some(p => p.callback==callback))
-		{	pendingOnChange.push({callback, thisArg: that, prevValue});
+{	const onChangeCallbacks = that[_onChangeCallbacks];
+	if (onChangeCallbacks)
+	{	for (const callback of traverseWeak(onChangeCallbacks))
+		{	if (!pendingOnChange.some(p => p.callback==callback))
+			{	pendingOnChange.push({callback, thisArg: that, prevValue});
+			}
 		}
 	}
-	for (const [id, {subj, compType}] of that[_dependOnMe])
-	{	const dep = subj.deref();
-		if (!dep)
-		{	that[_dependOnMe].delete(id);
-		}
-		else if ((compType & changeType) && (dep[_flags] & Flags.ValueStatusMask) != Flags.RecompInProgress)
-		{	if (knownToBeChanged)
-			{	invokeOnChangeCallbacks(dep, changeType, dep[_valueError] ?? dep[_value], true);
+	if (that[_dependOnMe])
+	{	for (const [id, {subj, compType}] of that[_dependOnMe])
+		{	const dep = subj.deref();
+			if (!dep)
+			{	that[_dependOnMe].delete(id);
 			}
-			else
-			{	dep[_flags] = Flags.WantRecomp | (dep[_flags] & Flags.IsErrorSignal);
-				if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj == dep))
-				{	pendingRecomp.push({subj: dep, cause: that});
+			else if ((compType & changeType) && (dep[_flags] & Flags.ValueStatusMask) != Flags.RecompInProgress)
+			{	if (knownToBeChanged)
+				{	invokeOnChangeCallbacks(dep, changeType, dep[_valueError] ?? dep[_value], true);
+				}
+				else
+				{	dep[_flags] = Flags.WantRecomp | (dep[_flags] & Flags.IsErrorSignal);
+					if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj == dep))
+					{	pendingRecomp.push({subj: dep, cause: that});
+					}
 				}
 			}
 		}
@@ -941,7 +976,7 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 
 function hasOnchange<T>(that: Sig<T>): boolean
 {	if (Math.abs(that[_hasOnchangeVersion]) != hasOnchangeVersion)
-	{	const yes = that[_onChangeCallbacks].length!=0 || that[_dependOnMe].values().some
+	{	const yes = that[_onChangeCallbacks]?.length || that[_dependOnMe]?.values().some
 		(	depRef =>
 			{	const dep = depRef.subj.deref();
 				return dep && hasOnchange(dep);
@@ -970,36 +1005,36 @@ function sigError<T>(that: Sig<T>)
 }
 
 function sigApply<T>(that: Sig<T>, args?: unknown[]): Any
-{	const parentSig = that[_propOfSignal];
-	if (parentSig)
-	{	const {value} = that;
-		if (typeof(value) == 'function') // if is a method of a parent signal's value
-		{	const {holder, path} = parentSig;
-			const useArgs = args ?? [];
-			return holder.convert
-			(	v => followPath(v, path, path.length-1)?.[path[path.length - 1]]?.(...useArgs.map(a => a instanceof Sig ? a.value : a))
-			).this;
-		}
+{	const parentSig = that[_optionalFields]?.propOfSignal;
+	if (parentSig && typeof(that.value) == 'function') // if is a method of a parent signal's value
+	{	const path = that[_optionalFields]!.propOfSignalPath!;
+		const useArgs = args ?? [];
+		return parentSig.convert
+		(	v => followPath(v, path, path.length-1)?.[path[path.length - 1]]?.(...useArgs.map(a => a instanceof Sig ? a.value : a))
+		).this;
 	}
 }
 
 function getProp<T>(that: Sig<T>, propName: string|symbol): Sig<unknown>
-{	const propOfSignal = that[_propOfSignal];
-	const holder: Sig<Any> = propOfSignal?.holder ?? that;
-	const path = propOfSignal ? [...propOfSignal.path, propName] : [propName];
-	const result = holder.convert<unknown>
+{	const propOfSignal = that[_optionalFields]?.propOfSignal;
+	const propOfSignalPath = that[_optionalFields]?.propOfSignalPath;
+	const parent: Sig<Any> = propOfSignal ?? that;
+	const path = propOfSignalPath ? [...propOfSignalPath, propName] : [propName];
+	const result = parent.convert<unknown>
 	(	v => followPath(v, path, path.length),
 		undefined,
 		propValue =>
-		{	const value = holder[_value];
+		{	const value = parent[_value];
 			const obj = followPath(value, path, path.length-1);
 			if (obj!=null && typeof(obj)=='object' && !deepEquals(obj[path[path.length - 1]], propValue))
 			{	obj[path[path.length - 1]] = propValue;
-				invokeOnChangeCallbacks(holder, CompType.Value, value, true);
+				invokeOnChangeCallbacks(parent, CompType.Value, value, true);
 			}
 		}
 	);
-	result[_propOfSignal] = {holder, path};
+	result[_optionalFields] ??= new OptionalFields<unknown>;
+	result[_optionalFields].propOfSignal = parent;
+	result[_optionalFields].propOfSignalPath = path;
 	return result.this;
 }
 
