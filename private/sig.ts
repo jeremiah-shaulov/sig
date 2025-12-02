@@ -931,7 +931,7 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 			}
 			else
 			{	dep[_flags] = Flags.WantRecomp | (dep[_flags] & Flags.IsErrorSignal);
-				if (!pendingRecomp.some(p => p.subj == dep) && hasOnchange(dep))
+				if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj == dep))
 				{	pendingRecomp.push({subj: dep, cause: that});
 				}
 			}
