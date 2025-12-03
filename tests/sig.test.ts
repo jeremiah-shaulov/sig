@@ -819,8 +819,19 @@ Deno.test
 
 		// Set through value setter
 		const url = sig(new URL('http://localhost/path'));
+		const page = sig(() => url.value?.pathname.match(/^\/([^/]+)/)?.[1] || '');
+
+		page.subscribe
+		(	function(prevValue)
+			{	changes.push(`${prevValue} -> ${page.value}`);
+			}
+		);
+		assertEquals(changes, ['undefined -> path']);
+		changes.length = 0;
+
 		url.this.href.value = 'http://localhost/path2';
 		assertEquals(url.value?.pathname, '/path2');
+		assertEquals(changes, ['path -> path2']);
 	}
 );
 

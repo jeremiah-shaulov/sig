@@ -34,7 +34,7 @@ const pendingOnChange = new Array<OnChangeRecord<Any>>;
 /**	Signals scheduled for recomputation after their dependencies changed.
 	These are processed in order during the flush cycle, with the cause signal provided for context.
  **/
-const pendingRecomp = new Array<{subj: Sig<unknown>, cause: Sig<Any>}>;
+const pendingRecomp = new Array<{subj: Sig<unknown>, knownToBeChanged: boolean, cause: Sig<Any>}>;
 
 let batchLevel = 0;
 
@@ -106,8 +106,8 @@ function flushPendingOnChange()
 	{	batchLevel++;
 		while (true)
 		{	for (let i=0; i<pendingRecomp.length; i++)
-			{	const {subj, cause} = pendingRecomp[i];
-				recomp(subj, CompType.None, cause);
+			{	const {subj, knownToBeChanged, cause} = pendingRecomp[i];
+				recomp(subj, CompType.None, knownToBeChanged, cause);
 			}
 			pendingRecomp.length = 0;
 			for (let i=0; i<pendingOnChange.length; i++)
@@ -480,7 +480,7 @@ export class Sig<T>
 		{	if (typeof(compValue)=='function' || compValue instanceof Sig)
 			{	throw new Error('Cannot override computation function for signals with value setters');
 			}
-			doSetValue(this, convPromise(compValue), undefined, true) && flushPendingOnChange();
+			doSetValue(this, convPromise(compValue), false, undefined, true) && flushPendingOnChange();
 		}
 		else
 		{	// Cancel the current computation with the OLD cancelComp before replacing it
@@ -496,7 +496,7 @@ export class Sig<T>
 			{	this[_optionalFields].cancelComp = undefined;
 			}
 			this[_flags] = Flags.WantRecomp | (this[_flags] & Flags.IsErrorSignal);
-			recomp(this, CompType.None, undefined, true) && flushPendingOnChange();
+			recomp(this, CompType.None, false, undefined, true) && flushPendingOnChange();
 		}
 	}
 
@@ -824,7 +824,7 @@ function removeMyselfAsDepFromUsedSignals<T>(that: Sig<T>)
 	}
 }
 
-function recomp<T>(that: Sig<T>, compType: CompType, cause?: Sig<unknown>, noCancelComp=false): CompType
+function recomp<T>(that: Sig<T>, compType: CompType, knownToBeChanged=false, cause?: Sig<unknown>, noCancelComp=false): CompType
 {	addMyselfAsDepToBeingComputed(that, compType);
 	if ((that[_flags] & Flags.ValueStatusMask) == Flags.WantRecomp)
 	{	that[_flags] = Flags.RecompInProgress | (that[_flags] & Flags.IsErrorSignal);
@@ -854,7 +854,7 @@ function recomp<T>(that: Sig<T>, compType: CompType, cause?: Sig<unknown>, noCan
 		}
 		// 3. Add onChangeCallbacks to pending (if changed)
 		that[_flags] = Flags.Value | (that[_flags] & Flags.IsErrorSignal);
-		return doSetValue(that, newValue);
+		return doSetValue(that, newValue, knownToBeChanged);
 	}
 	return CompType.None;
 }
@@ -874,7 +874,7 @@ function sigSync<T>(that: Sig<T>)
 	}
 }
 
-function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, ofValuePromise?: Promise<T>, bySetter=false): CompType
+function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, ofValuePromise?: Promise<T>, bySetter=false): CompType
 {	let changeType = CompType.None;
 	if (!ofValuePromise || ofValuePromise==that[_valuePromise]) // ignore result of old promise if `that.valuePromise` was set to a new promise
 	{	const prevError = that[_valueError];
@@ -890,10 +890,10 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, ofValuePromis
 			that[_valuePromise] = promise;
 			promise.then
 			(	v =>
-				{	doSetValue(that, v, promise, bySetter);
+				{	doSetValue(that, v, knownToBeChanged, promise, bySetter);
 				},
 				e =>
-				{	doSetValue(that, e instanceof Error ? e : new Error(e+''), promise, bySetter);
+				{	doSetValue(that, e instanceof Error ? e : new Error(e+''), knownToBeChanged, promise, bySetter);
 				}
 			);
 		}
@@ -927,7 +927,7 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, ofValuePromis
 				else if (prevError)
 				{	changeType = CompType.Error|CompType.Value; // error -> value
 				}
-				else if (!deepEquals(newValue, prevValue))
+				else if (knownToBeChanged || !deepEquals(newValue, prevValue))
 				{	changeType = CompType.Value; // value -> value
 				}
 			}
@@ -964,14 +964,9 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 			{	that[_dependOnMe].delete(id);
 			}
 			else if ((compType & changeType) && (dep[_flags] & Flags.ValueStatusMask) != Flags.RecompInProgress)
-			{	if (knownToBeChanged)
-				{	invokeOnChangeCallbacks(dep, changeType, dep[_valueError] ?? dep[_value], true);
-				}
-				else
-				{	dep[_flags] = Flags.WantRecomp | (dep[_flags] & Flags.IsErrorSignal);
-					if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj == dep))
-					{	pendingRecomp.push({subj: dep, cause: that});
-					}
+			{	dep[_flags] = Flags.WantRecomp | (dep[_flags] & Flags.IsErrorSignal);
+				if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj == dep))
+				{	pendingRecomp.push({subj: dep, knownToBeChanged, cause: that});
 				}
 			}
 		}
