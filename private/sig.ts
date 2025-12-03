@@ -529,8 +529,12 @@ export class Sig<T>
 						return cur;
 					},
 
-					set()
-					{	throw new Error(`Use 'set()' method to set signal value`);
+					set: (_target, prop, newValue) =>
+					{	if (prop !== 'value')
+						{	throw new Error('Cannot set this property');
+						}
+						this.set(newValue);
+						return true;
 					},
 
 					// So `instanceof Sig` works
@@ -1024,7 +1028,7 @@ function getProp<T>(that: Sig<T>, propName: string|symbol): Sig<unknown>
 	(	v => followPath(v, path, path.length),
 		undefined,
 		propValue =>
-		{	const value = parent[_value];
+		{	const {value} = parent;
 			const obj = followPath(value, path, path.length-1);
 			if (obj!=null && typeof(obj)=='object' && !deepEquals(obj[path[path.length - 1]], propValue))
 			{	obj[path[path.length - 1]] = propValue;

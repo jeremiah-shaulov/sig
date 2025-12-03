@@ -816,6 +816,11 @@ Deno.test
 		assertEquals(currentUser!.name.first, 'Jane');
 		assertEquals(currentUser!.name.last, 'Doe');
 		assertEquals(currentUser!.age, 30);
+
+		// Set through value setter
+		const url = sig(new URL('http://localhost/path'));
+		url.this.href.value = 'http://localhost/path2';
+		assertEquals(url.value?.pathname, '/path2');
 	}
 );
 
