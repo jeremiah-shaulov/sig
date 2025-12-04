@@ -1,6 +1,6 @@
 <!--
 	This file is generated with the following command:
-	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.7/README.md --importUrl=jsr:@shaulov/sig@0.0.7 mod.ts
+	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.8/README.md --importUrl=jsr:@shaulov/sig@0.0.8 mod.ts
 -->
 
 # sig - feature-rich multipurpose signals library
@@ -33,10 +33,10 @@ This signals implementation is unique. Here are it's main features:
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.7/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.8/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
 // deno run --allow-net /tmp/example-p9mn.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.7';
+import {sig} from 'jsr:@shaulov/sig@0.0.8';
 
 // Load data asynchronously
 const dataLoader = sig(fetch('https://example.com/').then(res => res.text()));
@@ -158,6 +158,9 @@ sigA.value = 15;
 console.log(sigC.value); // 35
 ```
 
+The computation function is called only when necessary: if the signal has no subscribers, it's called only when signal's value is accessed.
+In the example above, the function is not yet called after assigning `15` to `sigA.value`, but only when `sigC.value` is accessed in the `console.log` statement.
+
 ### Error Handling in Computations
 
 If the function throws an error, the signal enters error state.
@@ -176,7 +179,7 @@ console.log(sigErr.error.value); // Error: Computation failed
 Computation functions can be async or return a Promise. While the Promise is pending,
 the signal enters busy state.
 In this state, the signal's `busy` property holds `true`, and the `value` property is the default value, or the last resolved value.
-The computation restarts on each change of the accessed signals.
+The computation restarts on each change of the accessed signals (if the signal has subscribers to value change).
 If it starts a new computation while a previous one is still pending, the previous one is ignored when it resolves, and you
 can provide cancellation function when you create the signal, that will be called to abort the previous computation.
 
@@ -241,14 +244,19 @@ const sigC = sig(() => sigA); // when sigA is error, sigC also enters error stat
 ## Signal Values
 
 The signal's `value` property holds the current value.
-Assigning a new value to this property updates the signal's value, triggers recomputation of dependent signals, and notifies subscribers.
+Assigning a new value to this property updates the signal's value, triggers recomputation of dependent signals (if necessary), and notifies subscribers.
 
 ```ts
 const mySig = sig(10);
-mySig.value = 42; // Updates value and notifies subscribers
+mySig.value = 42; // Updates value
 ```
 
 Alternatively, use `mySig.set(newValueOrFn, cancelComp)` method, that does the same, but also accepts an optional cancellation function as the second argument:
+
+```ts
+const mySig = sig(10);
+mySig..set(42); // Updates value
+```
 
 ### Converting Between Signal Types
 
@@ -322,7 +330,7 @@ Pass a `WeakRef` to `subscribe()` for automatic cleanup when the referenced obje
 is garbage collected:
 
 ```ts
-import {sig, Sig} from 'jsr:@shaulov/sig@0.0.7';
+import {sig, Sig} from 'jsr:@shaulov/sig@0.0.8';
 
 const mySig = sig(42);
 
@@ -378,7 +386,7 @@ and you should keep strong references to signals that you still need.
 The following example proves this.
 
 ```ts
-import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.7';
+import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.8';
 
 const sigA = sig(0);
 
@@ -439,10 +447,10 @@ The latter is a signal that caused the recomputation, or `undefined` if this is 
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.7/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.8/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
 // deno run /tmp/example-65ya.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.7';
+import {sig} from 'jsr:@shaulov/sig@0.0.8';
 import {assertEquals} from 'jsr:@std/assert@1.0.16/equals';
 
 const sigA = sig(1);
@@ -511,6 +519,12 @@ const nameSig = userSig.this.profile.name; // Sig<string|undefined>
 Method calls through `.this` create computed signals that re-evaluate the method:
 
 ```ts
+// To download and run this example:
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.8/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-pf4z>/' > /tmp/example-pf4z.ts
+// deno run /tmp/example-pf4z.ts
+
+import {sig} from 'jsr:@shaulov/sig@0.0.8';
+
 const sigA = sig(['a', 'b', 'c']);
 const sigS = sigA.this.slice(1);
 
@@ -525,6 +539,12 @@ console.log(sigS.value); // ['b', 'c', 'd'] (automatically recomputed)
 Method arguments can be signals. When argument signals change, the method is re-evaluated:
 
 ```ts
+// To download and run this example:
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.8/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-ksv8>/' > /tmp/example-ksv8.ts
+// deno run /tmp/example-ksv8.ts
+
+import {sig} from 'jsr:@shaulov/sig@0.0.8';
+
 const sigA = sig(['a', 'b', 'c', 'd', 'e']);
 const sigI = sig(1);
 const sigS = sigA.this.slice(sigI);
@@ -535,9 +555,29 @@ sigI.value = 2;
 console.log(sigS.value); // ['c', 'd', 'e'] (recomputed with new argument)
 ```
 
-## Modifying Signal Values
+Example with Map:
 
-### Assignment and Deep Equality
+```ts
+// To download and run this example:
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.8/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-rlut>/' > /tmp/example-rlut.ts
+// deno run /tmp/example-rlut.ts
+
+import {sig} from 'jsr:@shaulov/sig@0.0.8';
+
+const sigMap = sig(new Map([['a', 1], ['b', 2], ['c', 3]]));
+const sigKey = sig('a');
+const sigValue = sigMap.this.get(sigKey);
+
+console.log(sigValue.value); // 1
+
+sigKey.value = 'b';
+console.log(sigValue.value); // 2
+
+sigMap.mut.set('b', 20);
+console.log(sigValue.value); // 20
+```
+
+## Modifying Signal Values (`mut`)
 
 Assigning to `mySig.value` or using `mySig.set()` triggers change notifications
 (if the new value is not deeply equal to the previous value).
@@ -551,7 +591,9 @@ const sigS = sigA.this.slice(1);
 
 console.log(sigS.value); // ['b', 'c']
 
+// sigA.value.push('d') - will NOT trigger notification, so use:
 sigA.mut.push('d'); // Notification triggered after push completes
+
 console.log(sigS.value); // ['b', 'c', 'd']
 ```
 
@@ -580,7 +622,8 @@ console.log(sigC.value); // 30
 ```
 
 [batch()](generated-doc/function.batch/README.md) works with both synchronous and asynchronous callbacks. For async callbacks,
-batching continues until the returned Promise resolves or rejects.
+batching continues until the returned Promise resolves or rejects
+(this blocks notifications to all signals during that time).
 
 ## Converting Signals
 
@@ -629,10 +672,10 @@ before storing it in the signal.
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.7/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-pf4z>/' > /tmp/example-pf4z.ts
-// deno run /tmp/example-pf4z.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.8/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-ajdy>/' > /tmp/example-ajdy.ts
+// deno run /tmp/example-ajdy.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.7';
+import {sig} from 'jsr:@shaulov/sig@0.0.8';
 
 const sigA = sig(1);
 sigA.setConverter

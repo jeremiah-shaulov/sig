@@ -148,6 +148,9 @@
 	console.log(sigC.value); // 35
 	```
 
+	The computation function is called only when necessary: if the signal has no subscribers, it's called only when signal's value is accessed.
+	In the example above, the function is not yet called after assigning `15` to `sigA.value`, but only when `sigC.value` is accessed in the `console.log` statement.
+
 	### Error Handling in Computations
 
 	If the function throws an error, the signal enters error state.
@@ -166,7 +169,7 @@
 	Computation functions can be async or return a Promise. While the Promise is pending,
 	the signal enters busy state.
 	In this state, the signal's `busy` property holds `true`, and the `value` property is the default value, or the last resolved value.
-	The computation restarts on each change of the accessed signals.
+	The computation restarts on each change of the accessed signals (if the signal has subscribers to value change).
 	If it starts a new computation while a previous one is still pending, the previous one is ignored when it resolves, and you
 	can provide cancellation function when you create the signal, that will be called to abort the previous computation.
 
@@ -231,14 +234,19 @@
 	## Signal Values
 
 	The signal's `value` property holds the current value.
-	Assigning a new value to this property updates the signal's value, triggers recomputation of dependent signals, and notifies subscribers.
+	Assigning a new value to this property updates the signal's value, triggers recomputation of dependent signals (if necessary), and notifies subscribers.
 
 	```ts
 	const mySig = sig(10);
-	mySig.value = 42; // Updates value and notifies subscribers
+	mySig.value = 42; // Updates value
 	```
 
 	Alternatively, use `mySig.set(newValueOrFn, cancelComp)` method, that does the same, but also accepts an optional cancellation function as the second argument:
+
+	```ts
+	const mySig = sig(10);
+	mySig..set(42); // Updates value
+	```
 
 	### Converting Between Signal Types
 
@@ -500,6 +508,11 @@
 	Method calls through `.this` create computed signals that re-evaluate the method:
 
 	```ts
+	// To run this example:
+	// deno run example.ts
+
+	import {sig} from './mod.ts';
+
 	const sigA = sig(['a', 'b', 'c']);
 	const sigS = sigA.this.slice(1);
 
@@ -514,6 +527,11 @@
 	Method arguments can be signals. When argument signals change, the method is re-evaluated:
 
 	```ts
+	// To run this example:
+	// deno run example.ts
+
+	import {sig} from './mod.ts';
+
 	const sigA = sig(['a', 'b', 'c', 'd', 'e']);
 	const sigI = sig(1);
 	const sigS = sigA.this.slice(sigI);
@@ -524,9 +542,28 @@
 	console.log(sigS.value); // ['c', 'd', 'e'] (recomputed with new argument)
 	```
 
-	## Modifying Signal Values
+	Example with Map:
 
-	### Assignment and Deep Equality
+	```ts
+	// To run this example:
+	// deno run example.ts
+
+	import {sig} from './mod.ts';
+
+	const sigMap = sig(new Map([['a', 1], ['b', 2], ['c', 3]]));
+	const sigKey = sig('a');
+	const sigValue = sigMap.this.get(sigKey);
+
+	console.log(sigValue.value); // 1
+
+	sigKey.value = 'b';
+	console.log(sigValue.value); // 2
+
+	sigMap.mut.set('b', 20);
+	console.log(sigValue.value); // 20
+	```
+
+	## Modifying Signal Values (`mut`)
 
 	Assigning to `mySig.value` or using `mySig.set()` triggers change notifications
 	(if the new value is not deeply equal to the previous value).
@@ -540,7 +577,9 @@
 
 	console.log(sigS.value); // ['b', 'c']
 
+	// sigA.value.push('d') - will NOT trigger notification, so use:
 	sigA.mut.push('d'); // Notification triggered after push completes
+
 	console.log(sigS.value); // ['b', 'c', 'd']
 	```
 
@@ -569,7 +608,8 @@
 	```
 
 	{@link batch()} works with both synchronous and asynchronous callbacks. For async callbacks,
-	batching continues until the returned Promise resolves or rejects.
+	batching continues until the returned Promise resolves or rejects
+	(this blocks notifications to all signals during that time).
 
 	## Converting Signals
 

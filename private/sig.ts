@@ -428,6 +428,8 @@ export class Sig<T>
 	 **/
 	[_optionalFields]: OptionalFields<T> | undefined;
 
+	/**	This constructor is used internally. Use the {@link sig()} function to create signals.
+	 **/
 	constructor(compValue: ValueOrPromise<T>|CompValue<T>, defaultValue: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>, isErrorSignal?: boolean)
 	{	this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
 		this[_defaultValue] = defaultValue;
@@ -466,6 +468,7 @@ export class Sig<T>
 	}
 
 	/**	Sets a new value for the signal.
+		This is the same as assigning to `mySig.value` (but allows to provide a cancellation callback as well).
 		Accepts a static value, Error, Promise, computation function, or another signal.
 		You can convert between static and computed signals freely.
 
@@ -473,7 +476,7 @@ export class Sig<T>
 		For these signals, `set()` invokes the setter with the new value.
 
 		@param compValue New value for the signal. Same types as {@link sig()} constructor.
-		@param cancelComp Optional callback to cancel an ongoing async computation when replaced.
+		@param cancelComp Optional callback to cancel an ongoing async computation when new computation starts. Only used when `compValue` is a computation function. If not provided, any existing cancelation callback is removed.
 	 **/
 	set(compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>)
 	{	if (this[_optionalFields]?.setValue)
@@ -679,6 +682,8 @@ export class Sig<T>
 		```
 	 **/
 	convert<V, D=V>(compValue: (value: T) => ValueOrPromise<V>, defaultValue: D, setValue?: SetValue<V|D>, cancelComp?: CancelComp<V|D>): Sig<D extends V ? V : V|D>;
+	/**	Overload for when no default value is provided.
+	 **/
 	convert<V>(compValue: (value: T) => ValueOrPromise<V>): Sig<V|undefined>;
 	convert<V, D=V>(compValue: (value: T) => ValueOrPromise<V>, defaultValue?: D, setValue?: SetValue<V|D>, cancelComp?: CancelComp<V|D>): Sig<D extends V ? V : V|D>
 	{	return sig<V, D>
@@ -1056,6 +1061,8 @@ function sigConvert<T, R>(that: Sig<T>, compValue: (value: T) => ValueOrPromise<
 	@param cancelComp Optional callback to cancel ongoing async computations when replaced.
  **/
 export function sig<V, D=V>(compValue: CompValue<V>, defaultValue: D, setValue?: SetValue<V|D>, cancelComp?: CancelComp<V|D>): Sig<D extends V ? V : V|D>;
+/**	Overload for when no default value is provided.
+ **/
 export function sig<V>(compValue: CompValue<V>): Sig<V|undefined>;
 
 /**	Creates a {@link Sig} holding a boolean value.
@@ -1085,6 +1092,8 @@ export function sig(value: string): Sig<string>;
 	@param defaultValue Default value when the underlying signal is in error state.
  **/
 export function sig<V, D=V>(underlyingSignal: Sig<V>, defaultValue: D): Sig<D extends V ? V : V|D>;
+/**	Overload for when no default value is provided.
+ **/
 export function sig<V>(underlyingSignal: Sig<V>): Sig<V|undefined>;
 
 /**	Creates a {@link Sig} holding a static value, Promise, or Error.
@@ -1102,6 +1111,8 @@ export function sig<V>(underlyingSignal: Sig<V>): Sig<V|undefined>;
 	@param defaultValue Default for error/promise state (undefined for non-primitives).
  **/
 export function sig<V, D=V>(value: V|Promise<V>|Error, defaultValue: D): Sig<D extends V ? V : V|D>;
+/**	Overload for when no default value is provided.
+ **/
 export function sig<V>(value: V|Promise<V>): Sig<V|undefined>;
 
 /**	Creates a {@link Sig} with no initial value (undefined).

@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.7"
+import {Sig} from "jsr:@shaulov/sig@0.0.8"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
@@ -208,6 +208,8 @@ For rejected Promises, no notification occurs.
 
 #### 🔧 `constructor`(compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, defaultValue: T, setValue?: [SetValue](../private.type.SetValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>, isErrorSignal?: `boolean`)
 
+> This constructor is used internally. Use the [sig()](../function.sig/README.md) function to create signals.
+
 
 
 #### 📄 `accessor` value: T
@@ -297,6 +299,7 @@ For rejected Promises, no notification occurs.
 #### ⚙ set(compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): `void`
 
 > Sets a new value for the signal.
+> This is the same as assigning to `mySig.value` (but allows to provide a cancellation callback as well).
 > Accepts a static value, Error, Promise, computation function, or another signal.
 > You can convert between static and computed signals freely.
 > 
@@ -309,7 +312,7 @@ For rejected Promises, no notification occurs.
 > 
 > 🎚️ Parameter **cancelComp**:
 > 
-> Optional callback to cancel an ongoing async computation when replaced.
+> Optional callback to cancel an ongoing async computation when new computation starts. Only used when `compValue` is a computation function. If not provided, any existing cancelation callback is removed.
 
 
 
@@ -354,6 +357,8 @@ For rejected Promises, no notification occurs.
 
 
 #### ⚙ convert\<V>(compValue: (value: T) => [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<V>): [Sig](../class.Sig/README.md)\<V>
+
+> Overload for when no default value is provided.
 
 
 

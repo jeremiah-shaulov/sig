@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {_deepEquals} from "jsr:@shaulov/sig@0.0.7"
+import {_deepEquals} from "jsr:@shaulov/sig@0.0.8"
 ```
 
 `function` \_deepEquals(a: `unknown`, b: `unknown`): `boolean`
