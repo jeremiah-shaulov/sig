@@ -1,11 +1,11 @@
 import {deepEquals} from './deep_equals.ts';
 import type {ThisSig} from './this_sig.ts';
 
-const _id = Symbol();
-const _compValue = Symbol();
+const _id = Symbol('id');
+const _compValue = Symbol('compValue');
 const _defaultValue = Symbol();
-const _flagsAndOnchangeVersion = Symbol('flags');
-const _value = Symbol();
+const _flagsAndOnchangeVersion = Symbol();
+const _value = Symbol('value');
 const _promiseOrError = Symbol();
 const _dependOnMe = Symbol();
 const _iDependOn = Symbol();
