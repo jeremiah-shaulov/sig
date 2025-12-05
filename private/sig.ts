@@ -389,7 +389,7 @@ export class Sig<T>
 	 **/
 	[_defaultValue]: T;
 
-	/**	Whether the signal needs recomputation, and other internal state flags.
+	/**	Low 4 bits contain flags (like whether the signal needs recomputation), and high bits contain the global version of the onChange callbacks (`hasOnchangeVersion`).
 		@ignore
 	 **/
 	[_flagsAndOnchangeVersion]: Flags;
