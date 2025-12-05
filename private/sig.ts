@@ -2,10 +2,9 @@ import {deepEquals} from './deep_equals.ts';
 import type {ThisSig} from './this_sig.ts';
 
 const _id = Symbol();
-const _hasOnchangeVersion = Symbol();
 const _compValue = Symbol();
 const _defaultValue = Symbol();
-const _flags = Symbol();
+const _flagsAndOnchangeVersion = Symbol('flags');
 const _value = Symbol();
 const _promiseOrError = Symbol();
 const _dependOnMe = Symbol();
@@ -13,6 +12,51 @@ const _iDependOn = Symbol();
 const _onChangeCallbacks = Symbol();
 const _optionalFields = Symbol();
 const _unwrap = Symbol();
+
+/**	Flags indicating which aspects of a signal's state were observed during computation.
+	Used as a bitmask to track what type of changes should trigger recomputation.
+
+	- `None`: No observation occurred.
+	- `Value`: The signal's value was accessed via `sig.value`.
+	- `Promise`: The signal's promise state was accessed via `sig.promise`.
+	- `Error`: The signal's error state was accessed via `sig.error`.
+
+	When a dependency changes, only signals that observed the changed aspect are recomputed.
+ **/
+const enum CompType
+{	None = 0,
+	Value = 1,     // Observed the signal's value
+	Promise = 2,   // Observed the signal's promise state
+	Error = 4,     // Observed the signal's error state
+}
+
+/**	Internal flags tracking signal state.
+
+	`flags & Flags.ValueStatusMask` - Computation status:
+	- `Value`: The signal's value is current and valid.
+	- `WantRecomp`: The signal is stale and needs recomputation.
+	- `RecompInProgress`: Currently computing, prevent redundant recomputations.
+
+	`flags & Flags.IsErrorSignal` - Whether this signal treats Error as a value (for sig.error).
+ **/
+const enum Flags
+{	// Value status:
+	ValueStatusMask = 3,
+	Value = 0,              // Value is current and valid
+	WantRecomp = 1,         // Value is stale and needs recomputation
+	RecompInProgress = 2,   // Currently computing a new value
+
+	// Signal type:
+	IsErrorSignal = 4,	    // Signal treats Error as a value
+
+	FlagsLowMask = 7,
+
+	// If there's hasOnchangeVersion, this flag means positive meaning (i.e. does have onchange listeners)
+	HasOnChangePositive = 8,
+
+	FlagsMask = 15,
+	OnChangeVersionStep = 16,
+}
 
 /**	The currently evaluating signal, used to track dependencies during computation.
 
@@ -39,7 +83,7 @@ let batchLevel = 0;
 
 let idEnum = 0;
 
-let hasOnchangeVersion = 1;
+let hasOnchangeVersion = Flags.OnChangeVersionStep;
 
 // deno-lint-ignore no-explicit-any
 type Any = any;
@@ -125,43 +169,6 @@ function flushPendingOnChange()
 		}
 		batchLevel--;
 	}
-}
-
-/**	Flags indicating which aspects of a signal's state were observed during computation.
-	Used as a bitmask to track what type of changes should trigger recomputation.
-
-	- `None`: No observation occurred.
-	- `Value`: The signal's value was accessed via `sig.value`.
-	- `Promise`: The signal's promise state was accessed via `sig.promise`.
-	- `Error`: The signal's error state was accessed via `sig.error`.
-
-	When a dependency changes, only signals that observed the changed aspect are recomputed.
- **/
-const enum CompType
-{	None = 0,
-	Value = 1,     // Observed the signal's value
-	Promise = 2,   // Observed the signal's promise state
-	Error = 4,     // Observed the signal's error state
-}
-
-/**	Internal flags tracking signal state.
-
-	`flags & Flags.ValueStatusMask` - Computation status:
-	- `Value`: The signal's value is current and valid.
-	- `WantRecomp`: The signal is stale and needs recomputation.
-	- `RecompInProgress`: Currently computing, prevent redundant recomputations.
-
-	`flags & Flags.IsErrorSignal` - Whether this signal treats Error as a value (for sig.error).
- **/
-const enum Flags
-{	// Value status:
-	ValueStatusMask = 3,
-	Value = 0,              // Value is current and valid
-	WantRecomp = 1,         // Value is stale and needs recomputation
-	RecompInProgress = 2,   // Currently computing a new value
-
-	// Signal type:
-	IsErrorSignal = 4,	    // Signal treats Error as a value
 }
 
 class OptionalFields<T>
@@ -372,9 +379,6 @@ export class Sig<T>
 	/** @ignore */
 	[_id] = idEnum++;
 
-	/** @ignore */
-	[_hasOnchangeVersion] = 0;
-
 	/**	Static value, Promise, Error, or computation function that produces the signal's value.
 		@ignore
 	 **/
@@ -388,7 +392,7 @@ export class Sig<T>
 	/**	Whether the signal needs recomputation, and other internal state flags.
 		@ignore
 	 **/
-	[_flags]: Flags;
+	[_flagsAndOnchangeVersion]: Flags;
 
 	/**	Current value. If in promise state, this holds the last value or default. If in error state, holds the default value.
 		@ignore
@@ -427,7 +431,7 @@ export class Sig<T>
 	constructor(compValue: ValueOrPromise<T>|CompValue<T>, defaultValue: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>, isErrorSignal?: boolean)
 	{	this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
 		this[_defaultValue] = defaultValue;
-		this[_flags] = Flags.WantRecomp | (isErrorSignal ? Flags.IsErrorSignal : 0);
+		this[_flagsAndOnchangeVersion] = Flags.WantRecomp | (isErrorSignal ? Flags.IsErrorSignal : 0);
 		this[_value] = defaultValue;
 		const useSetValue = typeof(compValue)=='function' && !(compValue instanceof Sig) ? setValue as SetValue<unknown> : undefined;
 		if (useSetValue || cancelComp)
@@ -492,7 +496,7 @@ export class Sig<T>
 			else if (this[_optionalFields])
 			{	this[_optionalFields].cancelComp = undefined;
 			}
-			this[_flags] = Flags.WantRecomp | (this[_flags] & Flags.IsErrorSignal);
+			this[_flagsAndOnchangeVersion] = Flags.WantRecomp | (this[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 			recomp(this, CompType.None, false, undefined, true) && flushPendingOnChange();
 		}
 	}
@@ -721,7 +725,7 @@ export class Sig<T>
 		this[_optionalFields] ??= new OptionalFields<T>;
 		this[_optionalFields].setValue = ((newValue: T) => vh.set(newValue)) as SetValue<unknown>;
 		this[_optionalFields].cancelComp = undefined;
-		this[_flags] = Flags.WantRecomp | (this[_flags] & Flags.IsErrorSignal);
+		this[_flagsAndOnchangeVersion] = Flags.WantRecomp | (this[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 	}
 
 	/**	Registers a callback invoked when the signal's value changes.
@@ -746,7 +750,7 @@ export class Sig<T>
 		else
 		{	this[_onChangeCallbacks] = [callback as Any];
 		}
-		hasOnchangeVersion++;
+		hasOnchangeVersion += Flags.OnChangeVersionStep;
 		recomp(this, CompType.None) && flushPendingOnChange(); // this is needed if computation never called for this signal, to record dependencies
 	}
 
@@ -761,7 +765,7 @@ export class Sig<T>
 				if (cb instanceof WeakRef ? cb.deref()==callbackFunc : cb==callbackFunc)
 				{	onChangeCallbacks[i] = onChangeCallbacks[onChangeCallbacks.length - 1];
 					onChangeCallbacks.length--;
-					hasOnchangeVersion++;
+					hasOnchangeVersion += Flags.OnChangeVersionStep;
 					break;
 				}
 			}
@@ -825,8 +829,8 @@ function removeMyselfAsDepFromUsedSignals<T>(that: Sig<T>)
 
 function recomp<T>(that: Sig<T>, compType: CompType, knownToBeChanged=false, cause?: Sig<unknown>, noCancelComp=false): CompType
 {	addMyselfAsDepToBeingComputed(that, compType);
-	if ((that[_flags] & Flags.ValueStatusMask) == Flags.WantRecomp)
-	{	that[_flags] = Flags.RecompInProgress | (that[_flags] & Flags.IsErrorSignal);
+	if ((that[_flagsAndOnchangeVersion] & Flags.ValueStatusMask) == Flags.WantRecomp)
+	{	that[_flagsAndOnchangeVersion] = Flags.RecompInProgress | (that[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 		let newValue: T|Promise<T>|Error;
 		// 1. Remove myself as dependency from signals used in my computation function. Later `compValue` will readd myself to those signals for which computation triggers
 		removeMyselfAsDepFromUsedSignals(that);
@@ -852,7 +856,7 @@ function recomp<T>(that: Sig<T>, compType: CompType, knownToBeChanged=false, cau
 		{	newValue = compValue;
 		}
 		// 3. Add onChangeCallbacks to pending (if changed)
-		that[_flags] = Flags.Value | (that[_flags] & Flags.IsErrorSignal);
+		that[_flagsAndOnchangeVersion] = Flags.Value | (that[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 		return doSetValue(that, newValue, knownToBeChanged);
 	}
 	return CompType.None;
@@ -863,11 +867,11 @@ function sigSync<T>(that: Sig<T>)
 	if (compSubj != evalContext)
 	{	const prevEvalContext = evalContext;
 		evalContext = compSubj;
-		that[_flags] = Flags.RecompInProgress | (that[_flags] & Flags.IsErrorSignal);
+		that[_flagsAndOnchangeVersion] = Flags.RecompInProgress | (that[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 		queueMicrotask
 		(	() =>
 			{	evalContext = prevEvalContext;
-				that[_flags] = Flags.Value | (that[_flags] & Flags.IsErrorSignal);
+				that[_flagsAndOnchangeVersion] = Flags.Value | (that[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 			}
 		);
 	}
@@ -897,11 +901,11 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 			);
 		}
 		else
-		{	let newError = !(that[_flags] & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
+		{	let newError = !(that[_flagsAndOnchangeVersion] & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
 			if (bySetter && !newError)
 			{	try
 				{	that[_optionalFields]?.setValue?.(newValue);
-					that[_flags] = Flags.WantRecomp | (that[_flags] & Flags.IsErrorSignal);
+					that[_flagsAndOnchangeVersion] = Flags.WantRecomp | (that[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 					return recomp(that, CompType.None);
 				}
 				catch (e)
@@ -961,8 +965,8 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 			if (!dep)
 			{	that[_dependOnMe].delete(id);
 			}
-			else if ((compType & changeType) && (dep[_flags] & Flags.ValueStatusMask) != Flags.RecompInProgress)
-			{	dep[_flags] = Flags.WantRecomp | (dep[_flags] & Flags.IsErrorSignal);
+			else if ((compType & changeType) && (dep[_flagsAndOnchangeVersion] & Flags.ValueStatusMask) != Flags.RecompInProgress)
+			{	dep[_flagsAndOnchangeVersion] = Flags.WantRecomp | (dep[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 				if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj == dep))
 				{	pendingRecomp.push({subj: dep, knownToBeChanged, cause: that});
 				}
@@ -971,17 +975,17 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 	}
 }
 
-function hasOnchange<T>(that: Sig<T>): boolean
-{	if (Math.abs(that[_hasOnchangeVersion]) != hasOnchangeVersion)
+function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
+{	if ((that[_flagsAndOnchangeVersion] & ~Flags.FlagsMask) != hasOnchangeVersion)
 	{	const yes = that[_onChangeCallbacks]?.length || that[_dependOnMe]?.values().some
 		(	depRef =>
 			{	const dep = depRef.subj.deref();
 				return dep && hasOnchange(dep);
 			}
 		);
-		that[_hasOnchangeVersion] = yes ? hasOnchangeVersion : -hasOnchangeVersion;
+		that[_flagsAndOnchangeVersion] = (that[_flagsAndOnchangeVersion] & Flags.FlagsLowMask) | (yes ? hasOnchangeVersion | Flags.HasOnChangePositive : hasOnchangeVersion);
 	}
-	return that[_hasOnchangeVersion] > 0;
+	return that[_flagsAndOnchangeVersion] & Flags.HasOnChangePositive;
 }
 
 function convPromise<V, T>(compValue: V|Promise<Value<T>>): V|Promise<T>
@@ -1157,7 +1161,7 @@ function *traverseWeak<T extends object>(items: Array<T|WeakRef<T>>)
 		if (!item)
 		{	items[i] = items[items.length - 1];
 			items.length--;
-			hasOnchangeVersion++;
+			hasOnchangeVersion += Flags.OnChangeVersionStep;
 		}
 		else
 		{	yield item;
