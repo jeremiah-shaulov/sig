@@ -7,8 +7,7 @@ const _compValue = Symbol();
 const _defaultValue = Symbol();
 const _flags = Symbol();
 const _value = Symbol();
-const _valuePromise = Symbol();
-const _valueError = Symbol();
+const _promiseOrError = Symbol();
 const _dependOnMe = Symbol();
 const _iDependOn = Symbol();
 const _onChangeCallbacks = Symbol();
@@ -396,15 +395,10 @@ export class Sig<T>
 	 **/
 	[_value]: T;
 
-	/**	Active promise if the signal is in promise state, undefined otherwise.
+	/**	Active promise if the signal is in promise state, Error object if the signal is in error state, undefined otherwise.
 		@ignore
 	 **/
-	[_valuePromise]: Promise<T> | undefined;
-
-	/**	Error object if the signal is in error state, undefined otherwise.
-		@ignore
-	 **/
-	[_valueError]: Error | undefined;
+	[_promiseOrError]: Promise<T> | Error | undefined;
 
 	/**	Weakly-referenced list of signals that depend on this signal.
 		When this signal changes, these dependent signals are marked for recomputation.
@@ -487,8 +481,8 @@ export class Sig<T>
 		}
 		else
 		{	// Cancel the current computation with the OLD cancelComp before replacing it
-			if (this[_valuePromise])
-			{	this[_optionalFields]?.cancelComp?.(this[_valuePromise]);
+			if (this[_promiseOrError] instanceof Promise)
+			{	this[_optionalFields]?.cancelComp?.(this[_promiseOrError]);
 			}
 			this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
 			if (typeof(compValue)=='function' && !(compValue instanceof Sig))
@@ -610,7 +604,7 @@ export class Sig<T>
 	 **/
 	get promise(): Promise<T>|undefined
 	{	recomp(this, CompType.Promise) && flushPendingOnChange();
-		return this[_valuePromise];
+		return this[_promiseOrError] instanceof Promise ? this[_promiseOrError] : undefined;
 	}
 
 	/**	Returns a signal that is `true` when this signal is in promise state, `false` otherwise.
@@ -620,7 +614,7 @@ export class Sig<T>
 	{	return new Sig
 		(	() =>
 			{	recomp(this, CompType.Promise) && flushPendingOnChange();
-				return !!this[_valuePromise];
+				return this[_promiseOrError] instanceof Promise;
 			},
 			false
 		);
@@ -842,8 +836,8 @@ function recomp<T>(that: Sig<T>, compType: CompType, knownToBeChanged=false, cau
 		{	const prevEvalContext = evalContext;
 			evalContext = that as Sig<unknown>;
 			try
-			{	if (!noCancelComp && that[_valuePromise])
-				{	that[_optionalFields]?.cancelComp?.(that[_valuePromise]);
+			{	if (!noCancelComp && that[_promiseOrError] instanceof Promise)
+				{	that[_optionalFields]?.cancelComp?.(that[_promiseOrError]);
 				}
 				const result = compValue instanceof Sig ? compValue : (compValue as CompValue<T>)(() => sigSync(that), cause);
 				newValue = result instanceof Sig ? result.promise ?? sigError(result[_unwrap]) ?? result.value : convPromise(result);
@@ -881,18 +875,18 @@ function sigSync<T>(that: Sig<T>)
 
 function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, ofValuePromise?: Promise<T>, bySetter=false): CompType
 {	let changeType = CompType.None;
-	if (!ofValuePromise || ofValuePromise==that[_valuePromise]) // ignore result of old promise if `that.valuePromise` was set to a new promise
-	{	const prevError = that[_valueError];
+	if (!ofValuePromise || ofValuePromise===that[_promiseOrError]) // ignore result of old promise if `that.valuePromise` was set to a new promise
+	{	const prevError = that[_promiseOrError] instanceof Error ? that[_promiseOrError] : undefined;
 		const prevValue = that[_value];
 		if (newValue instanceof Promise)
 		{	if (prevError)
 			{	changeType = CompType.Error|CompType.Promise; // error -> promise
 			}
-			else if (!that[_valuePromise])
+			else if (!that[_promiseOrError])
 			{	changeType = CompType.Value|CompType.Promise; // value -> promise
 			}
 			const promise = newValue;
-			that[_valuePromise] = promise;
+			that[_promiseOrError] = promise;
 			promise.then
 			(	v =>
 				{	doSetValue(that, v, knownToBeChanged, promise, bySetter);
@@ -915,7 +909,7 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 				}
 			}
 			if (newError)
-			{	if (that[_valuePromise])
+			{	if (that[_promiseOrError] instanceof Promise)
 				{	changeType = CompType.Promise|CompType.Error; // promise -> error
 				}
 				else if (!prevError)
@@ -926,7 +920,7 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 				}
 			}
 			else
-			{	if (that[_valuePromise])
+			{	if (that[_promiseOrError] instanceof Promise)
 				{	changeType = CompType.Promise|CompType.Value; // promise -> value
 				}
 				else if (prevError)
@@ -937,8 +931,7 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 				}
 			}
 			that[_value] = newError ? that[_defaultValue] : newValue as T;
-			that[_valueError] = newError;
-			that[_valuePromise] = undefined;
+			that[_promiseOrError] = newError;
 			if (that[_compValue] instanceof Promise)
 			{	that[_compValue] = newValue as T; // unwrap the promise once it's resolved
 			}
@@ -1005,7 +998,7 @@ function convPromise<V, T>(compValue: V|Promise<Value<T>>): V|Promise<T>
 
 function sigError<T>(that: Sig<T>)
 {	recomp(that, CompType.Error) && flushPendingOnChange();
-	return that[_valueError];
+	return that[_promiseOrError] instanceof Error ? that[_promiseOrError] : undefined;
 }
 
 function sigApply<T>(that: Sig<T>, args?: unknown[]): Any
@@ -1044,8 +1037,8 @@ function getProp<T>(that: Sig<T>, propName: string|symbol): Sig<unknown>
 
 function sigConvert<T, R>(that: Sig<T>, compValue: (value: T) => ValueOrPromise<R>)
 {	recomp(that, CompType.Value|CompType.Promise|CompType.Error) && flushPendingOnChange();
-	const valuePromise = that[_valuePromise];
-	return valuePromise ? valuePromise.then(compValue) : that[_valueError] ?? compValue(that[_value] as T);
+	const promiseOrError = that[_promiseOrError];
+	return promiseOrError instanceof Promise ? promiseOrError.then(compValue) : promiseOrError ?? compValue(that[_value] as T);
 }
 
 /**	Creates a computed {@link Sig}.
