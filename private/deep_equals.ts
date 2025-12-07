@@ -13,6 +13,18 @@ export function deepEquals(a: unknown, b: unknown)
 {	return subequals(a, b, false, false, [], []);
 }
 
+/**	Recursively compares two values for deep equality.
+	Handles primitives, arrays, objects, circular references, and NaN.
+	Compares object properties including getters defined on prototypes.
+
+	@param a First value to compare
+	@param b Second value to compare
+	@param aCircular Whether 'a' is part of a circular reference chain
+	@param bCircular Whether 'b' is part of a circular reference chain
+	@param aParents Stack of parent objects for 'a' (for circular detection)
+	@param bParents Stack of parent objects for 'b' (for circular detection)
+	@returns true if values are deeply equal, false otherwise
+ **/
 function subequals(a: unknown, b: unknown, aCircular: boolean, bCircular: boolean, aParents: unknown[], bParents: unknown[])
 {	if (a===b || Number.isNaN(a) && Number.isNaN(b))
 	{	return true;
@@ -64,6 +76,14 @@ function subequals(a: unknown, b: unknown, aCircular: boolean, bCircular: boolea
 	return false;
 }
 
+/**	Adds an object to the parent stack and checks for circular references.
+	Circularity is detected by comparing with ancestors every 4 levels.
+	This optimization balances performance with circular detection.
+
+	@param parents Stack of parent objects
+	@param obj Object to add to the stack
+	@returns true if a circular reference was detected, false otherwise
+ **/
 function pushParent(parents: unknown[], obj: unknown)
 {	parents.push(obj);
 	if (parents.length%4 == 0) // check for circular references each 4th level
@@ -79,6 +99,13 @@ function pushParent(parents: unknown[], obj: unknown)
 	return false;
 }
 
+/**	Gets all property keys of an object including own properties and prototype getters.
+	Includes getter properties defined in the class (e.g., `class C {get prop() {}}`)
+	but not standard inherited methods.
+
+	@param obj Object to get keys from
+	@returns Array of property names (strings)
+ **/
 function getKeys(obj: object)
 {	// Own property names
 	const keys = Object.keys(Object.getOwnPropertyDescriptors(obj));

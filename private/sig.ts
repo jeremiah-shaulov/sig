@@ -1,18 +1,31 @@
 import {deepEquals} from './deep_equals.ts';
 import type {ThisSig} from './this_sig.ts';
 
+/**	Unique identifier for each signal instance, used in dependency tracking maps. **/
 const _id = Symbol('id');
+/**	Stores the computation function, static value, Promise, or Error that defines the signal. **/
 const _compValue = Symbol('compValue');
+/**	Default value returned when signal is in error/promise state or uninitialized. **/
 const _defaultValue = Symbol();
+/**	Packs signal status flags and onChange version number into a single field. **/
 const _flagsAndOnchangeVersion = Symbol();
+/**	Current computed value, or default value when in error/promise state. **/
 const _value = Symbol('value');
+/**	Active Promise (if in promise state) or Error object (if in error state). **/
 const _promiseOrError = Symbol();
+/**	Weakly-referenced map of signals that depend on this signal for recomputation. **/
 const _dependOnMe = Symbol();
+/**	Array of signals that this signal depends on during computation. **/
 const _iDependOn = Symbol();
+/**	Array of onChange callback functions (may include WeakRefs). **/
 const _onChangeCallbacks = Symbol();
+/**	Cached signal representing the busy state (sig.busy). **/
 const _busySig = Symbol();
+/**	Cached signal representing the error state (sig.error). **/
 const _errorSig = Symbol();
+/**	Container for optional signal metadata (setValue, cancelComp, etc.). **/
 const _optionalFields = Symbol();
+/**	Getter that unwraps a Proxy-wrapped signal to return the underlying Sig instance. **/
 const _unwrap = Symbol();
 
 /**	Flags indicating which aspects of a signal's state were observed during computation.
@@ -40,24 +53,26 @@ const enum CompType
 	- `RecompInProgress`: Currently computing, prevent redundant recomputations.
 
 	`flags & Flags.IsErrorSignal` - Whether this signal treats Error as a value (for sig.error).
+	`flags & Flags.HasOnChangePositive` - Cached result: whether this signal has onChange listeners.
+	`flags & ~Flags.FlagsMask` - Global onChange version number for cache invalidation.
  **/
 const enum Flags
-{	// Value status:
+{	// Value status (bits 0-1):
 	ValueStatusMask = 3,
 	Value = 0,              // Value is current and valid
 	WantRecomp = 1,         // Value is stale and needs recomputation
 	RecompInProgress = 2,   // Currently computing a new value
 
-	// Signal type:
-	IsErrorSignal = 4,	    // Signal treats Error as a value
+	// Signal type (bit 2):
+	IsErrorSignal = 4,	    // Signal treats Error as a value (for sig.error)
 
-	FlagsLowMask = 7,
+	FlagsLowMask = 7,       // Mask for bits 0-2
 
-	// If there's hasOnchangeVersion, this flag means positive meaning (i.e. does have onchange listeners)
-	HasOnChangePositive = 8,
+	// onChange listener cache (bit 3):
+	HasOnChangePositive = 8, // Signal has onChange listeners (direct or transitive)
 
-	FlagsMask = 15,
-	OnChangeVersionStep = 16,
+	FlagsMask = 15,         // Mask for all flag bits (0-3)
+	OnChangeVersionStep = 16, // Step size for incrementing global onChange version (bit 4+)
 }
 
 /**	The currently evaluating signal, used to track dependencies during computation.
@@ -81,10 +96,16 @@ const pendingOnChange = new Array<OnChangeRecord<Any>>;
  **/
 const pendingRecomp = new Array<{subj: Sig<unknown>, knownToBeChanged: boolean, cause: Sig<Any>}>;
 
+/**	Nesting level of batch() calls. When > 0, changes are deferred until all batches complete. **/
 let batchLevel = 0;
 
+/**	Counter for assigning unique IDs to signal instances. **/
 let idEnum = 0;
 
+/**	Global version number for onChange listener tracking.
+	Incremented when subscriptions change to invalidate cached hasOnchange() results.
+	Stored in high bits of _flagsAndOnchangeVersion.
+ **/
 let hasOnchangeVersion = Flags.OnChangeVersionStep;
 
 // deno-lint-ignore no-explicit-any
@@ -135,6 +156,11 @@ type OnChange<T> = (this: Sig<T>, prevValue: T|Error) => void;
  **/
 type OnChangeRecord<T> = {callback: OnChange<T>, thisArg: Sig<T>, prevValue: T|Error};
 
+/**	Proxy type for `sig.mut` that provides access to mutating methods.
+	Only includes methods (not properties) from the signal's value type.
+	Calling methods through this proxy triggers change notifications after execution.
+	Used to detect in-place mutations that wouldn't otherwise trigger reactivity.
+ **/
 type MutSig<T> =
 (	T extends Record<string|symbol, Any> ?
 		{[K in keyof T as K extends number ? never : K]: T[K] extends ((...args: Any[]) => Any) ? T[K] : never} :
@@ -145,6 +171,10 @@ type MutSig<T> =
 
 /**	Processes all pending signal recomputations and onChange callbacks.
 	This ensures that signals are updated in the correct order and all listeners are notified.
+
+	Only runs when not in a batch and not currently evaluating a signal.
+	Continues processing until no new recomputations are triggered by onChange callbacks.
+	This handles cascading updates where one signal change triggers another.
  **/
 function flushPendingOnChange()
 {	if (!batchLevel && !evalContext && (pendingRecomp.length>0 || pendingOnChange.length>0))
@@ -173,6 +203,10 @@ function flushPendingOnChange()
 	}
 }
 
+/**	Container for optional signal metadata to minimize memory usage.
+	Only allocated when a signal needs at least one of these features.
+	This keeps the base Sig class lightweight for simple value-holding signals.
+ **/
 class OptionalFields<T>
 {	/**	Optional setter called when setting a new value on a computed signal.
 	 **/
@@ -799,13 +833,22 @@ export class Sig<T>
 	}
 }
 
+/**	Registers the currently evaluating signal as a dependent of this signal.
+	When this signal changes, the dependent will be marked for recomputation.
+	Tracks which aspects (value/promise/error) were observed to minimize unnecessary updates.
+
+	@param that The signal being accessed (dependency)
+	@param compType Which aspect of the signal was accessed (value/promise/error)
+ **/
 function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 {	if (compType && evalContext)
 	{	const depRef = that[_dependOnMe]?.get(evalContext[_id]);
 		if (!depRef)
-		{	if (checkCircular(that, evalContext))
+		{	// New dependency: check for circular references before adding
+			if (checkCircular(that, evalContext))
 			{	throw new Error('Circular dependency detected between signals');
 			}
+			// Add bidirectional dependency links
 			that[_dependOnMe] ??= new Map;
 			that[_dependOnMe].set(evalContext[_id], {subj: new WeakRef(evalContext), compType});
 			if (!evalContext[_iDependOn]?.includes(that))
@@ -814,11 +857,20 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 			}
 		}
 		else
-		{	depRef.compType |= compType;
+		{	// Existing dependency: update what aspects are observed
+			depRef.compType |= compType;
 		}
 	}
 }
 
+/**	Detects circular dependencies in the signal dependency graph.
+	Prevents infinite loops by checking if a signal depends on itself through a chain.
+
+	@param that Starting signal to check
+	@param target Signal to search for in the dependency chain
+	@param visited Set of already-visited signals to avoid infinite loops
+	@returns true if circular dependency detected, false otherwise
+ **/
 function checkCircular<T>(that: Sig<T>, target: Sig<Any>, visited=new Set<Sig<Any>>): boolean|undefined
 {	if (that == target)
 	{	return true;
@@ -830,6 +882,12 @@ function checkCircular<T>(that: Sig<T>, target: Sig<Any>, visited=new Set<Sig<An
 	return that[_iDependOn]?.some(dep => checkCircular(dep, target, visited));
 }
 
+/**	Removes this signal from the dependent list of all signals it depends on.
+	Called before recomputation to clear old dependencies.
+	New dependencies will be established during the recomputation.
+
+	@param that The signal whose dependencies should be cleared
+ **/
 function removeMyselfAsDepFromUsedSignals<T>(that: Sig<T>)
 {	if (that[_iDependOn])
 	{	for (const usedSig of that[_iDependOn])
@@ -839,6 +897,21 @@ function removeMyselfAsDepFromUsedSignals<T>(that: Sig<T>)
 	}
 }
 
+/**	Recomputes a signal's value if it needs recomputation.
+	This is the core computation function that:
+	1. Registers dependency tracking
+	2. Removes old dependencies
+	3. Executes the computation function
+	4. Establishes new dependencies
+	5. Updates the value and triggers notifications
+
+	@param that Signal to recompute
+	@param compType Which aspect is being accessed (for dependency tracking)
+	@param knownToBeChanged Whether we know the value changed (skips equality check)
+	@param cause The signal that triggered this recomputation (for debugging)
+	@param noCancelComp Skip calling the cancel function for pending promises
+	@returns Flags indicating what changed (value/promise/error)
+ **/
 function recomp<T>(that: Sig<T>, compType: CompType, knownToBeChanged=false, cause?: Sig<unknown>, noCancelComp=false): CompType
 {	addMyselfAsDepToBeingComputed(that, compType);
 	if ((that[_flagsAndOnchangeVersion] & Flags.ValueStatusMask) == Flags.WantRecomp)
@@ -874,6 +947,12 @@ function recomp<T>(that: Sig<T>, compType: CompType, knownToBeChanged=false, cau
 	return CompType.None;
 }
 
+/**	Resumes dependency tracking after an async await point.
+	Called by user code via the sync() callback parameter in async computations.
+	Temporarily resets evalContext to allow tracking new dependencies.
+
+	@param that The signal whose computation is being synchronized
+ **/
 function sigSync<T>(that: Sig<T>)
 {	const compSubj = that as Sig<unknown>;
 	if (compSubj != evalContext)
@@ -889,6 +968,18 @@ function sigSync<T>(that: Sig<T>)
 	}
 }
 
+/**	Updates a signal's value and manages state transitions.
+	Handles transitions between value/promise/error states.
+	Performs deep equality checks to determine if change notifications are needed.
+	Schedules onChange callbacks and dependent signal recomputations.
+
+	@param that Signal to update
+	@param newValue New value, promise, or error
+	@param knownToBeChanged Skip equality check if we know it changed
+	@param ofValuePromise The promise this value came from (to ignore stale promises)
+	@param bySetter Whether this update came from a setter function
+	@returns Flags indicating what changed (value/promise/error)
+ **/
 function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, ofValuePromise?: Promise<T>, bySetter=false): CompType
 {	let changeType = CompType.None;
 	if (!ofValuePromise || ofValuePromise===that[_promiseOrError]) // ignore result of old promise if `that.valuePromise` was set to a new promise
@@ -903,6 +994,7 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 			}
 			const promise = newValue;
 			that[_promiseOrError] = promise;
+			// Set up handlers to update signal when promise resolves or rejects
 			promise.then
 			(	v =>
 				{	doSetValue(that, v, knownToBeChanged, promise, bySetter);
@@ -915,13 +1007,16 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 		else
 		{	let newError = !(that[_flagsAndOnchangeVersion] & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
 			if (bySetter && !newError)
-			{	try
+			{	// Try to apply the setter function, catching any errors it throws
+				try
 				{	that[_optionalFields]?.setValue?.(newValue);
+					// Setter succeeded, now recompute to get the new value
 					that[_flagsAndOnchangeVersion] = Flags.WantRecomp | (that[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
 					return recomp(that, CompType.None);
 				}
 				catch (e)
-				{	newError = e instanceof Error ? e : new Error(e+'');
+				{	// Setter threw an error, treat as error state
+					newError = e instanceof Error ? e : new Error(e+'');
 				}
 			}
 			if (newError)
@@ -936,7 +1031,8 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 				}
 			}
 			else
-			{	if (that[_promiseOrError] instanceof Promise)
+			{	// Transitioning out of error or promise state, or value changed
+				if (that[_promiseOrError] instanceof Promise)
 				{	changeType = CompType.Promise|CompType.Value; // promise -> value
 				}
 				else if (prevError)
@@ -946,8 +1042,10 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 				{	changeType = CompType.Value; // value -> value
 				}
 			}
+			// Update the signal's value and state
 			that[_value] = newError ? that[_defaultValue] : newValue as T;
 			that[_promiseOrError] = newError;
+			// Once a promise resolves, replace compValue with the resolved value
 			if (that[_compValue] instanceof Promise)
 			{	that[_compValue] = newValue as T; // unwrap the promise once it's resolved
 			}
@@ -962,6 +1060,16 @@ function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChan
 	return changeType;
 }
 
+/**	Schedules onChange callbacks and marks dependent signals for recomputation.
+	Callbacks are batched and invoked during the flush cycle.
+	Only triggers recomputation of dependents that observed the changed aspect.
+	Cleansup garbage-collected weak references during iteration.
+
+	@param that Signal that changed
+	@param changeType Which aspects changed (value/promise/error)
+	@param prevValue Previous value or error (passed to callbacks)
+	@param knownToBeChanged Whether we know dependents need recomputation
+ **/
 function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValue?: T|Error, knownToBeChanged=false)
 {	const onChangeCallbacks = that[_onChangeCallbacks];
 	if (onChangeCallbacks)
@@ -987,6 +1095,14 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 	}
 }
 
+/**	Determines if a signal has any onChange listeners (direct or transitive).
+	Caches the result using a global version number for efficiency.
+	When the version changes (due to subscribe/unsubscribe), cached results are invalidated.
+	Recursively checks dependent signals to find transitive listeners.
+
+	@param that Signal to check
+	@returns Flag indicating whether onChange listeners exist
+ **/
 function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
 {	if ((that[_flagsAndOnchangeVersion] & ~Flags.FlagsMask) != hasOnchangeVersion)
 	{	const yes = that[_onChangeCallbacks]?.length || that[_dependOnMe]?.values().some
@@ -1000,6 +1116,13 @@ function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
 	return that[_flagsAndOnchangeVersion] & Flags.HasOnChangePositive;
 }
 
+/**	Unwraps nested signals and converts errors to rejected promises.
+	If the value is a promise that resolves to a signal, extracts the signal's value.
+	If the value is a promise that resolves to an error, converts it to a rejected promise.
+
+	@param compValue Value or promise to convert
+	@returns Unwrapped value or promise
+ **/
 function convPromise<V, T>(compValue: V|Promise<Value<T>>): V|Promise<T>
 {	return !(compValue instanceof Promise) ? compValue : compValue.then
 	(	r =>
@@ -1012,11 +1135,25 @@ function convPromise<V, T>(compValue: V|Promise<Value<T>>): V|Promise<T>
 	);
 }
 
+/**	Gets the error from a signal, triggering recomputation if needed.
+	Used by the `sig.error` getter to access error state reactively.
+
+	@param that Signal to get error from
+	@returns Error object if in error state, undefined otherwise
+ **/
 function sigError<T>(that: Sig<T>)
 {	recomp(that, CompType.Error) && flushPendingOnChange();
 	return that[_promiseOrError] instanceof Error ? that[_promiseOrError] : undefined;
 }
 
+/**	Handles method calls on property signals (via sig.this.method(...)).
+	Creates a computed signal that re-evaluates the method when dependencies change.
+	Unwraps signal arguments to their values before calling the method.
+
+	@param that Property signal representing a method
+	@param args Arguments passed to the method (may include signals)
+	@returns Proxy-wrapped signal containing the method's return value
+ **/
 function sigApply<T>(that: Sig<T>, args?: unknown[]): Any
 {	const parentSig = that[_optionalFields]?.propOfSignal;
 	if (parentSig && typeof(that.value) == 'function') // if is a method of a parent signal's value
@@ -1028,6 +1165,15 @@ function sigApply<T>(that: Sig<T>, args?: unknown[]): Any
 	}
 }
 
+/**	Creates a signal representing a property of another signal's value.
+	The property signal automatically updates when the parent value changes.
+	Setting the property signal updates the parent signal's value.
+	Tracks the property path for nested property access.
+
+	@param that Parent signal
+	@param propName Property name to access
+	@returns Proxy-wrapped signal representing the property
+ **/
 function getProp<T>(that: Sig<T>, propName: string|symbol): Sig<unknown>
 {	const propOfSignal = that[_optionalFields]?.propOfSignal;
 	const propOfSignalPath = that[_optionalFields]?.propOfSignalPath;
@@ -1051,6 +1197,15 @@ function getProp<T>(that: Sig<T>, propName: string|symbol): Sig<unknown>
 	return result.this;
 }
 
+/**	Applies a conversion function to a signal's value, propagating all states.
+	Used by sig.convert() to transform values while preserving promise/error states.
+	If signal is in promise state, waits for resolution before converting.
+	If signal is in error state, propagates the error without conversion.
+
+	@param that Signal to convert
+	@param compValue Conversion function
+	@returns Converted value, promise, or error
+ **/
 function sigConvert<T, R>(that: Sig<T>, compValue: (value: T) => ValueOrPromise<R>)
 {	recomp(that, CompType.Value|CompType.Promise|CompType.Error) && flushPendingOnChange();
 	const promiseOrError = that[_promiseOrError];
@@ -1156,6 +1311,15 @@ export function sig<T>(compValue?: ValueOrPromise<T>|CompValue<T>, defaultValue?
 	) as Any;
 }
 
+/**	Traverses an object following a path of property names.
+	Returns undefined if any intermediate value is null/undefined.
+	Used for nested property access in sig.this.a.b.c patterns.
+
+	@param obj Starting object
+	@param path Array of property names to traverse
+	@param pathLen Number of path elements to traverse
+	@returns The value at the end of the path, or undefined
+ **/
 function followPath(obj: Any, path: Array<string|symbol>, pathLen: number)
 {	for (let i=0; i<pathLen; i++)
 	{	if (obj == null)
@@ -1166,6 +1330,14 @@ function followPath(obj: Any, path: Array<string|symbol>, pathLen: number)
 	return obj;
 }
 
+/**	Iterates over an array that may contain weak references.
+	Automatically dereferences WeakRefs and removes garbage-collected entries.
+	Updates the global version number when removing entries.
+	Iterates in reverse to safely remove items during iteration.
+
+	@param items Array of objects or weak references to objects
+	@yields Dereferenced objects that are still alive
+ **/
 function *traverseWeak<T extends object>(items: Array<T|WeakRef<T>>)
 {	for (let i=items.length; --i>=0;)
 	{	const itemOrRef = items[i];
@@ -1227,12 +1399,23 @@ export function batch<T>(callback: () => T): T
 	}
 }
 
+/**	Ends a batch operation and flushes pending changes.
+	Called when batch() callback completes successfully.
+
+	@param res Result to pass through
+	@returns The result unchanged
+ **/
 function endBatch<T>(res?: T)
 {	batchLevel--;
 	flushPendingOnChange();
 	return res;
 }
 
+/**	Ends a batch operation, flushes pending changes, and re-throws an error.
+	Called when batch() callback throws or returns a rejected promise.
+
+	@param error Error to re-throw
+ **/
 function endBatchThrow<T>(error?: T)
 {	batchLevel--;
 	flushPendingOnChange();
