@@ -10,6 +10,8 @@ const _promiseOrError = Symbol();
 const _dependOnMe = Symbol();
 const _iDependOn = Symbol();
 const _onChangeCallbacks = Symbol();
+const _busySig = Symbol();
+const _errorSig = Symbol();
 const _optionalFields = Symbol();
 const _unwrap = Symbol();
 
@@ -421,6 +423,16 @@ export class Sig<T>
 	 **/
 	[_onChangeCallbacks]: Array<OnChange<unknown> | WeakRef<OnChange<unknown>>> | undefined;
 
+	/**	Cached busy signal.
+		@ignore
+	 **/
+	[_busySig]: Sig<boolean> | undefined;
+
+	/**	Cached error signal.
+		@ignore
+	 **/
+	[_errorSig]: Sig<Error|undefined> | undefined;
+
 	/**	Optional fields.
 		@ignore
 	 **/
@@ -615,7 +627,7 @@ export class Sig<T>
 		Useful for reactively tracking async computation state.
 	 **/
 	get busy(): Sig<boolean>
-	{	return new Sig
+	{	return this[_busySig] ??= new Sig
 		(	() =>
 			{	recomp(this, CompType.Promise) && flushPendingOnChange();
 				return this[_promiseOrError] instanceof Promise;
@@ -628,7 +640,7 @@ export class Sig<T>
 		This signal itself is never in promise state.
 	 **/
 	get error(): Sig<Error|undefined>
-	{	return new Sig<Error|undefined>
+	{	return this[_errorSig] ??= new Sig<Error|undefined>
 		(	() => sigError(this),
 			undefined,
 			undefined,
