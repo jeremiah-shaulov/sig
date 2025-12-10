@@ -475,7 +475,7 @@ export class Sig<T>
 	/**	This constructor is used internally. Use the {@link sig()} function to create signals.
 	 **/
 	constructor(compValue: ValueOrPromise<T>|CompValue<T>, defaultValue: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>, isErrorSignal?: boolean)
-	{	this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
+	{	this[_compValue] = compValue instanceof Promise ? convPromise(compValue) : compValue;
 		this[_defaultValue] = defaultValue;
 		this[_flagsAndOnchangeVersion] = Flags.WantRecomp | (isErrorSignal ? Flags.IsErrorSignal : 0);
 		this[_value] = defaultValue;
@@ -527,14 +527,14 @@ export class Sig<T>
 		{	if (typeof(compValue)=='function' || compValue instanceof Sig)
 			{	throw new Error('Cannot override computation function for signals with value setters');
 			}
-			doSetValue(this, convPromise(compValue), false, undefined, true) && flushPendingOnChange();
+			doSetValue(this, compValue instanceof Promise ? convPromise(compValue) : compValue, false, undefined, true) && flushPendingOnChange();
 		}
 		else
 		{	// Cancel the current computation with the OLD cancelComp before replacing it
 			if (this[_promiseOrError] instanceof Promise)
 			{	this[_optionalFields]?.cancelComp?.(this[_promiseOrError]);
 			}
-			this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
+			this[_compValue] = compValue instanceof Promise ? convPromise(compValue) : compValue;
 			if (compValue instanceof Promise || typeof(compValue)=='function' && !(compValue instanceof Sig))
 			{	this[_optionalFields] ??= new OptionalFields<T>;
 				this[_optionalFields].cancelComp = cancelComp as CancelComp<unknown>;
@@ -929,7 +929,7 @@ function recomp<T>(that: Sig<T>, compType: CompType, knownToBeChanged=false, cau
 				{	that[_optionalFields]?.cancelComp?.(that[_promiseOrError]);
 				}
 				const result = compValue instanceof Sig ? compValue : (compValue as CompValue<T>)(() => sigSync(that), cause);
-				newValue = result instanceof Sig ? result.promise ?? sigError(result[_unwrap]) ?? result.value : convPromise(result);
+				newValue = result instanceof Promise ? convPromise(result) : convNonPromise(result);
 			}
 			catch (e)
 			{	newValue = e instanceof Error ? e : new Error(e+'');
@@ -1116,6 +1116,10 @@ function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
 	return that[_flagsAndOnchangeVersion] & Flags.HasOnChangePositive;
 }
 
+function convNonPromise<T>(result: Value<T>)
+{	return result instanceof Sig ? result.promise ?? sigError(result[_unwrap]) ?? result.value : result;
+}
+
 /**	Unwraps nested signals and converts errors to rejected promises.
 	If the value is a promise that resolves to a signal, extracts the signal's value.
 	If the value is a promise that resolves to an error, converts it to a rejected promise.
@@ -1123,10 +1127,10 @@ function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
 	@param compValue Value or promise to convert
 	@returns Unwrapped value or promise
  **/
-function convPromise<V, T>(compValue: V|Promise<Value<T>>): V|Promise<T>
-{	return !(compValue instanceof Promise) ? compValue : compValue.then
+function convPromise<T>(compValue: Promise<Value<T>>): Promise<T>
+{	return compValue.then
 	(	r =>
-		{	const result = r instanceof Sig ? r.promise ?? sigError(r[_unwrap]) ?? r.value : r;
+		{	const result = convNonPromise(r);
 			if (result instanceof Error)
 			{	throw result;
 			}
