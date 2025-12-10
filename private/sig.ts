@@ -527,7 +527,7 @@ export class Sig<T>
 		{	if (typeof(compValue)=='function' || compValue instanceof Sig)
 			{	throw new Error('Cannot override computation function for signals with value setters');
 			}
-			doSetValue(this, compValue instanceof Promise ? convPromise(compValue) : compValue, false, undefined, true) && flushPendingOnChange();
+			doSetValue(this, compValue instanceof Promise ? convPromise(compValue) : compValue, false, true) && flushPendingOnChange();
 		}
 		else
 		{	// Cancel the current computation with the OLD cancelComp before replacing it
@@ -980,82 +980,81 @@ function sigSync<T>(that: Sig<T>)
 	@param bySetter Whether this update came from a setter function
 	@returns Flags indicating what changed (value/promise/error)
  **/
-function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, ofValuePromise?: Promise<T>, bySetter=false): CompType
+function doSetValue<T>(that: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, bySetter=false): CompType
 {	let changeType = CompType.None;
-	if (!ofValuePromise || ofValuePromise===that[_promiseOrError]) // ignore result of old promise if `that.valuePromise` was set to a new promise
-	{	const prevError = that[_promiseOrError] instanceof Error ? that[_promiseOrError] : undefined;
-		const prevValue = that[_value];
-		if (newValue instanceof Promise)
-		{	if (prevError)
-			{	changeType = CompType.Error|CompType.Promise; // error -> promise
-			}
-			else if (!that[_promiseOrError])
-			{	changeType = CompType.Value|CompType.Promise; // value -> promise
-			}
-			const promise = newValue;
-			that[_promiseOrError] = promise;
-			// Set up handlers to update signal when promise resolves or rejects
-			promise.then
-			(	v =>
-				{	doSetValue(that, v, knownToBeChanged, promise, bySetter);
-				},
-				e =>
-				{	doSetValue(that, e instanceof Error ? e : new Error(e+''), knownToBeChanged, promise, bySetter);
+	const prevError = that[_promiseOrError] instanceof Error ? that[_promiseOrError] : undefined;
+	const prevValue = that[_value];
+	if (newValue instanceof Promise)
+	{	if (prevError)
+		{	changeType = CompType.Error|CompType.Promise; // error -> promise
+		}
+		else if (!that[_promiseOrError])
+		{	changeType = CompType.Value|CompType.Promise; // value -> promise
+		}
+		const promise = newValue;
+		that[_promiseOrError] = promise;
+		// Set up handlers to update signal when promise resolves or rejects
+		promise.then
+		(	v =>
+			{	if (that[_promiseOrError] == promise) // ignore result of old promise if `that.valuePromise` was set to a new promise
+				{	doSetValue(that, v, knownToBeChanged, bySetter) && flushPendingOnChange();
 				}
-			);
+			},
+			e =>
+			{	if (that[_promiseOrError] == promise) // ignore result of old promise if `that.valuePromise` was set to a new promise
+				{	doSetValue(that, e instanceof Error ? e : new Error(e+''), knownToBeChanged, bySetter) && flushPendingOnChange();
+				}
+			}
+		);
+	}
+	else
+	{	let newError = !(that[_flagsAndOnchangeVersion] & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
+		if (bySetter && !newError)
+		{	// Try to apply the setter function, catching any errors it throws
+			try
+			{	that[_optionalFields]?.setValue?.(newValue);
+				// Setter succeeded, now recompute to get the new value
+				that[_flagsAndOnchangeVersion] = Flags.WantRecomp | (that[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
+				return recomp(that, CompType.None);
+			}
+			catch (e)
+			{	// Setter threw an error, treat as error state
+				newError = e instanceof Error ? e : new Error(e+'');
+			}
+		}
+		if (newError)
+		{	if (that[_promiseOrError] instanceof Promise)
+			{	changeType = CompType.Promise|CompType.Error; // promise -> error
+			}
+			else if (!prevError)
+			{	changeType = CompType.Value|CompType.Error; // value -> error
+			}
+			else if (newError.constructor!=prevError.constructor || newError.message!=prevError.message)
+			{	changeType = CompType.Error; // error -> error
+			}
 		}
 		else
-		{	let newError = !(that[_flagsAndOnchangeVersion] & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
-			if (bySetter && !newError)
-			{	// Try to apply the setter function, catching any errors it throws
-				try
-				{	that[_optionalFields]?.setValue?.(newValue);
-					// Setter succeeded, now recompute to get the new value
-					that[_flagsAndOnchangeVersion] = Flags.WantRecomp | (that[_flagsAndOnchangeVersion] & ~Flags.ValueStatusMask);
-					return recomp(that, CompType.None);
-				}
-				catch (e)
-				{	// Setter threw an error, treat as error state
-					newError = e instanceof Error ? e : new Error(e+'');
-				}
+		{	// Transitioning out of error or promise state, or value changed
+			if (that[_promiseOrError] instanceof Promise)
+			{	changeType = CompType.Promise|CompType.Value; // promise -> value
 			}
-			if (newError)
-			{	if (that[_promiseOrError] instanceof Promise)
-				{	changeType = CompType.Promise|CompType.Error; // promise -> error
-				}
-				else if (!prevError)
-				{	changeType = CompType.Value|CompType.Error; // value -> error
-				}
-				else if (newError.constructor!=prevError.constructor || newError.message!=prevError.message)
-				{	changeType = CompType.Error; // error -> error
-				}
+			else if (prevError)
+			{	changeType = CompType.Error|CompType.Value; // error -> value
 			}
-			else
-			{	// Transitioning out of error or promise state, or value changed
-				if (that[_promiseOrError] instanceof Promise)
-				{	changeType = CompType.Promise|CompType.Value; // promise -> value
-				}
-				else if (prevError)
-				{	changeType = CompType.Error|CompType.Value; // error -> value
-				}
-				else if (knownToBeChanged || !deepEquals(newValue, prevValue))
-				{	changeType = CompType.Value; // value -> value
-				}
-			}
-			// Update the signal's value and state
-			that[_value] = newError ? that[_defaultValue] : newValue as T;
-			that[_promiseOrError] = newError;
-			// Once a promise resolves, replace compValue with the resolved value
-			if (that[_compValue] instanceof Promise)
-			{	that[_compValue] = newValue as T; // unwrap the promise once it's resolved
+			else if (knownToBeChanged || !deepEquals(newValue, prevValue))
+			{	changeType = CompType.Value; // value -> value
 			}
 		}
-		if (changeType)
-		{	invokeOnChangeCallbacks(that, changeType, prevError ?? prevValue);
-			if (ofValuePromise)
-			{	flushPendingOnChange();
-			}
+		// Update the signal's value and state
+		that[_value] = newError ? that[_defaultValue] : newValue as T;
+		that[_promiseOrError] = newError;
+		// Once a promise resolves, replace compValue with the resolved value
+		if (that[_compValue] instanceof Promise)
+		{	that[_compValue] = newValue as T; // unwrap the promise once it's resolved
 		}
+	}
+	if (changeType)
+	{	invokeOnChangeCallbacks(that, changeType, prevError ?? prevValue);
 	}
 	return changeType;
 }
