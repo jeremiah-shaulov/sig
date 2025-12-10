@@ -535,7 +535,7 @@ export class Sig<T>
 			{	this[_optionalFields]?.cancelComp?.(this[_promiseOrError]);
 			}
 			this[_compValue] = typeof(compValue)=='function' ? compValue : convPromise(compValue);
-			if (typeof(compValue)=='function' && !(compValue instanceof Sig))
+			if (compValue instanceof Promise || typeof(compValue)=='function' && !(compValue instanceof Sig))
 			{	this[_optionalFields] ??= new OptionalFields<T>;
 				this[_optionalFields].cancelComp = cancelComp as CancelComp<unknown>;
 			}
