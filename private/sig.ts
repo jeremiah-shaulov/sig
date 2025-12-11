@@ -865,7 +865,7 @@ class ValueHolder<T>
 		@param bySetter Whether this update came from a setter function
 		@returns Flags indicating what changed (value/promise/error)
 	**/
-	doSetValue(ownerSig: Sig<T>, newValue: T, knownToBeChanged=false, bySetter=false): CompType
+	doSetValue(ownerSig: Sig<T>, newValue: T, knownToBeChanged=false): CompType
 	{	let changeType = CompType.None;
 		const prevValue = this.value;
 		if (knownToBeChanged || !deepEquals(newValue, prevValue))
