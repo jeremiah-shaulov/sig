@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.11"
+import {Sig} from "jsr:@shaulov/sig@0.0.12"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
@@ -186,7 +186,7 @@ For rejected Promises, no notification occurs.
 
 ## This class has
 
-- [constructor](#-constructorcompvalue-valueorpromiset--compvaluet-defaultvalue-t-setvalue-setvaluet-cancelcomp-cancelcompt-iserrorsignal-boolean)
+- [constructor](#-constructorvalueholder-valueholdert)
 - 7 properties:
 [value](#-accessor-value-t),
 [this](#-get-this-thissigt),
@@ -206,7 +206,7 @@ For rejected Promises, no notification occurs.
 [\[Symbol.toPrimitive\]](#-symboltoprimitive-string)
 
 
-#### 🔧 `constructor`(compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, defaultValue: T, setValue?: [SetValue](../private.type.SetValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>, isErrorSignal?: `boolean`)
+#### 🔧 `constructor`(valueHolder: [ValueHolder](../private.class.ValueHolder/README.md)\<T>)
 
 > This constructor is used internally. Use the [sig()](../function.sig/README.md) function to create signals.
 
@@ -400,8 +400,9 @@ For rejected Promises, no notification occurs.
 > Signals normally compute lazily. Adding a listener makes the signal actively
 > recompute whenever dependencies change.
 > 
-> Adding the first listener to an uncomputed signal triggers immediate computation
-> to establish dependencies. After the computation, the callback can be invoked if the value differs from default.
+> When adding the first listener to a computed signal, whose value is not yet computed or stale,
+> this triggers immediate computation to establish dependencies.
+> After the computation, the callback can be invoked if the value differs from default.
 > 
 > 🎚️ Parameter **callback**:
 > 

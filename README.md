@@ -1,6 +1,6 @@
 <!--
 	This file is generated with the following command:
-	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.11/README.md --importUrl=jsr:@shaulov/sig@0.0.11 mod.ts
+	deno run --allow-all https://raw.githubusercontent.com/jeremiah-shaulov/tsa/v0.0.57/tsa.ts doc-md --outFile=README.md --outUrl=https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.12/README.md --importUrl=jsr:@shaulov/sig@0.0.12 mod.ts
 -->
 
 # sig - feature-rich multipurpose signals library
@@ -33,10 +33,10 @@ This signals implementation is unique. Here are it's main features:
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.11/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.12/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-p9mn>/' > /tmp/example-p9mn.ts
 // deno run --allow-net /tmp/example-p9mn.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.11';
+import {sig} from 'jsr:@shaulov/sig@0.0.12';
 
 // Load data asynchronously
 const dataLoader = sig(fetch('https://example.com/').then(res => res.text()));
@@ -330,7 +330,7 @@ Pass a `WeakRef` to `subscribe()` for automatic cleanup when the referenced obje
 is garbage collected:
 
 ```ts
-import {sig, Sig} from 'jsr:@shaulov/sig@0.0.11';
+import {sig, Sig} from 'jsr:@shaulov/sig@0.0.12';
 
 const mySig = sig(42);
 
@@ -386,7 +386,7 @@ and you should keep strong references to signals that you still need.
 The following example proves this.
 
 ```ts
-import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.11';
+import {type Sig, sig} from 'jsr:@shaulov/sig@0.0.12';
 
 const sigA = sig(0);
 
@@ -447,10 +447,10 @@ The latter is a signal that caused the recomputation, or `undefined` if this is 
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.11/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.12/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-65ya>/' > /tmp/example-65ya.ts
 // deno run /tmp/example-65ya.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.11';
+import {sig} from 'jsr:@shaulov/sig@0.0.12';
 import {assertEquals} from 'jsr:@std/assert@1.0.16/equals';
 
 const sigA = sig(1);
@@ -520,10 +520,10 @@ Method calls through `.this` create computed signals that re-evaluate the method
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.11/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-pf4z>/' > /tmp/example-pf4z.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.12/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-pf4z>/' > /tmp/example-pf4z.ts
 // deno run /tmp/example-pf4z.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.11';
+import {sig} from 'jsr:@shaulov/sig@0.0.12';
 
 const sigA = sig(['a', 'b', 'c']);
 const sigS = sigA.this.slice(1);
@@ -540,10 +540,10 @@ Method arguments can be signals. When argument signals change, the method is re-
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.11/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-ksv8>/' > /tmp/example-ksv8.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.12/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-ksv8>/' > /tmp/example-ksv8.ts
 // deno run /tmp/example-ksv8.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.11';
+import {sig} from 'jsr:@shaulov/sig@0.0.12';
 
 const sigA = sig(['a', 'b', 'c', 'd', 'e']);
 const sigI = sig(1);
@@ -559,10 +559,10 @@ Example with Map:
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.11/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-rlut>/' > /tmp/example-rlut.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.12/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-rlut>/' > /tmp/example-rlut.ts
 // deno run /tmp/example-rlut.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.11';
+import {sig} from 'jsr:@shaulov/sig@0.0.12';
 
 const sigMap = sig(new Map([['a', 1], ['b', 2], ['c', 3]]));
 const sigKey = sig('a');
@@ -672,10 +672,10 @@ before storing it in the signal.
 
 ```ts
 // To download and run this example:
-// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.11/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-ajdy>/' > /tmp/example-ajdy.ts
+// curl 'https://raw.githubusercontent.com/jeremiah-shaulov/sig/0.0.12/README.md' | perl -ne 's/^> //; $y=$1 if /^```(.)?/; print $_ if $y&&$m; $m=$y&&$m+/<example-ajdy>/' > /tmp/example-ajdy.ts
 // deno run /tmp/example-ajdy.ts
 
-import {sig} from 'jsr:@shaulov/sig@0.0.11';
+import {sig} from 'jsr:@shaulov/sig@0.0.12';
 
 const sigA = sig(1);
 sigA.setConverter
@@ -705,7 +705,7 @@ Here are properties and methods of the [Sig](generated-doc/class.Sig/README.md) 
 
 > `class` Sig\<T><br>
 > {<br>
-> &nbsp; &nbsp; 🔧 [constructor](generated-doc/class.Sig/README.md#-constructorcompvalue-valueorpromiset--compvaluet-defaultvalue-t-setvalue-setvaluet-cancelcomp-cancelcompt-iserrorsignal-boolean)(compValue: [ValueOrPromise](generated-doc/private.type.ValueOrPromise/README.md)\<T> | [CompValue](generated-doc/private.type.CompValue/README.md)\<T>, defaultValue: T, setValue?: [SetValue](generated-doc/private.type.SetValue/README.md)\<T>, cancelComp?: [CancelComp](generated-doc/private.type.CancelComp/README.md)\<T>, isErrorSignal?: `boolean`)<br>
+> &nbsp; &nbsp; 🔧 [constructor](generated-doc/class.Sig/README.md#-constructorvalueholder-valueholdert)(valueHolder: [ValueHolder](generated-doc/private.class.ValueHolder/README.md)\<T>)<br>
 > &nbsp; &nbsp; 📄 `accessor` [value](generated-doc/class.Sig/README.md#-accessor-value-t): T<br>
 > &nbsp; &nbsp; 📄 `get` [this](generated-doc/class.Sig/README.md#-get-this-thissigt)(): ThisSig\<T><br>
 > &nbsp; &nbsp; 📄 `get` [mut](generated-doc/class.Sig/README.md#-get-mut-mutsigt)(): MutSig\<T><br>
