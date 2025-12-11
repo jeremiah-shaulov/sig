@@ -556,14 +556,16 @@ export class Sig<T>
 		Useful for reactively tracking async computation state.
 	 **/
 	get busy(): Sig<boolean>
-	{	return this.#busySig ??= new Sig(new ValueHolderComp(Flags.WantRecomp, false, false, undefined, undefined, () => !!this.promise));
+	{	const valueHolder: ValueHolder<boolean> = new ValueHolderComp(Flags.WantRecomp, false, false, undefined, undefined, () => !!this.promise);
+		return this.#busySig ??= new Sig(valueHolder);
 	}
 
 	/**	Returns a signal containing the Error object when in error state, otherwise `undefined`.
 		This signal itself is never in promise state.
 	 **/
 	get error(): Sig<Error|undefined>
-	{	return this.#errorSig ??= new Sig(new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, () => this[_curError]()));
+	{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, () => this[_curError]());
+		return this.#errorSig ??= new Sig(valueHolder);
 	}
 
 	/**	Returns the default value of the signal, as provided when the signal was created.
@@ -821,13 +823,42 @@ class ValueHolder<T>
 			ownerSig[_valueHolder] = newValueHolder;
 			return newValueHolder.doSetValue(ownerSig, convPromise(compValue));
 		}
-		const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue);
-		ownerSig[_valueHolder] = newValueHolder;
-		return newValueHolder.doSetValue(ownerSig, compValue);
+		if (compValue instanceof Error)
+		{	const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue);
+			ownerSig[_valueHolder] = newValueHolder;
+			return newValueHolder.doSetValue(ownerSig, compValue);
+		}
+		return this.doSetValue(ownerSig, compValue);
 	}
 
 	recomp(_ownerSig: Sig<T>, _knownToBeChanged=false, _cause?: Sig<unknown>, _noCancelComp=false): CompType
 	{	return CompType.None;
+	}
+
+	/**	Updates a signal's value and manages state transitions.
+		Handles transitions between value/promise/error states.
+		Performs deep equality checks to determine if change notifications are needed.
+		Schedules onChange callbacks and dependent signal recomputations.
+
+		@param that Signal to update
+		@param newValue New value, promise, or error
+		@param knownToBeChanged Skip equality check if we know it changed
+		@param ofValuePromise The promise this value came from (to ignore stale promises)
+		@param bySetter Whether this update came from a setter function
+		@returns Flags indicating what changed (value/promise/error)
+	**/
+	doSetValue(ownerSig: Sig<T>, newValue: T, knownToBeChanged=false, bySetter=false): CompType
+	{	let changeType = CompType.None;
+		const prevValue = this.value;
+		if (knownToBeChanged || !deepEquals(newValue, prevValue))
+		{	changeType = CompType.Value; // value -> value
+		}
+		// Update the signal's value and state
+		this.value = newValue;
+		if (changeType)
+		{	invokeOnChangeCallbacks(ownerSig, changeType, prevValue);
+		}
+		return changeType;
 	}
 }
 
@@ -877,7 +908,7 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		@param bySetter Whether this update came from a setter function
 		@returns Flags indicating what changed (value/promise/error)
 	**/
-	doSetValue(ownerSig: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, bySetter=false): CompType
+	override doSetValue(ownerSig: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, bySetter=false): CompType
 	{	let changeType = CompType.None;
 		const prevError = this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
 		const prevValue = this.value;
@@ -1291,10 +1322,12 @@ export function sig<T>(...args: undefined extends T ? [Error?] : never): Sig<T>;
 
 export function sig<T>(compValue?: ValueOrPromise<T>|CompValue<T>, defaultValue?: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>): Sig<T>
 {	if (typeof(compValue)=='function' || compValue instanceof Sig)
-	{	return new Sig(new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, cancelComp, compValue as CompValue<T>, setValue));
+	{	const valueHolder: ValueHolder<T> = new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, cancelComp, compValue as CompValue<T>, setValue);
+		return new Sig(valueHolder);
 	}
 	if (compValue instanceof Promise || compValue instanceof Error)
-	{	return new Sig(new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, compValue, cancelComp));
+	{	const valueHolder: ValueHolder<T> = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, compValue, cancelComp);
+		return new Sig(valueHolder);
 	}
 	return new Sig
 	(	new ValueHolder<T>
