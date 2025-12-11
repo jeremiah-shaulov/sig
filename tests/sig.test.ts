@@ -84,8 +84,7 @@ Deno.test
 
 		const userName = sig('John');
 		userName.subscribe(() => changes.push('userName'));
-		assertEquals(changes, ['userName']); // `subscribe()` triggers calc
-		changes.length = 0;
+		assertEquals(changes.length, 0); // `subscribe()` triggers calc
 
 		// Create signal `user`
 
@@ -192,15 +191,14 @@ Deno.test
 
 		const cnt = sig(0);
 		cnt.subscribe(() => changes.push('cnt'));
-		// No onChange because value (0) equals default (0)
-		assertEquals(changes, []);
+		// No onChange because this is not a computed signal
+		assertEquals(changes.length, 0);
 
 		// Create signal `cond`
 
 		const cond = sig<number>(new Error, NaN);
 		cond.subscribe(() => changes.push('cond'));
-		assertEquals(changes, ['cond']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		// Create signal `cntIfEnabled`
 
@@ -213,8 +211,7 @@ Deno.test
 
 		const title = sig('Value: ');
 		title.subscribe(() => changes.push('title'));
-		assertEquals(changes, ['title']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		// Create signal `cntIfEnabledWithTitle`
 
@@ -366,8 +363,7 @@ Deno.test
 		// Create signal that transitions from value to promise
 		const valueSig = sig(10);
 		valueSig.subscribe(() => changes.push('valueSig'));
-		assertEquals(changes, ['valueSig']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		let resolver2: (value: number) => void;
 		const promise2 = new Promise<number>(y => resolver2 = y);
@@ -411,8 +407,7 @@ Deno.test
 		// Signal created with Error object
 		const errorSig = sig<number|undefined>(new Error('Initial error'));
 		errorSig.subscribe(() => changes.push('errorSig'));
-		assertEquals(changes, ['errorSig']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		assertEquals(errorSig.error.value?.message, 'Initial error');
 		assertEquals(errorSig.value, undefined);
@@ -456,8 +451,7 @@ Deno.test
 		// Test different error types
 		const sameErrorTypeSig = sig<number|undefined>(new Error('Error 1'));
 		sameErrorTypeSig.subscribe(() => changes.push('sameErrorTypeSig'));
-		assertEquals(changes, ['sameErrorTypeSig']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		sameErrorTypeSig.set(new Error('Error 1')); // Same message, same type
 		assertEquals(changes, []); // Should not trigger change
@@ -476,8 +470,7 @@ Deno.test
 		// Signal with default value in error state
 		const errorSig = sig<number>(new Error('Error'), 999);
 		errorSig.subscribe(() => changes.push('errorSig'));
-		assertEquals(changes, ['errorSig']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		assertEquals(errorSig.value, 999); // default value
 		assertEquals(errorSig.error.value?.message, 'Error');
@@ -521,8 +514,7 @@ Deno.test
 		const listener = () => changes.push('listener');
 
 		num.subscribe(listener);
-		assertEquals(changes, ['listener']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		num.set(20);
 		assertEquals(changes, ['listener']);
@@ -557,8 +549,7 @@ Deno.test
 
 		const original = sig(10, undefined);
 		original.subscribe(() => changes.push('original'));
-		assertEquals(changes, ['original']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		// Wrap the signal
 		const wrapped = sig(original);
@@ -594,8 +585,7 @@ Deno.test
 		const weakRefCallback = () => changes.push('weakref');
 		const weakRef = new WeakRef(weakRefCallback);
 		num.subscribe(weakRef);
-		assertEquals(changes, ['weakref']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		// Callback should fire
 		num.set(20);
@@ -642,8 +632,7 @@ Deno.test
 		num.subscribe(listener3);
 
 		// Only the first listener triggers on add (value computation)
-		assertEquals(changes, ['listener1']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		// Change value - all should fire
 		num.set(20);
@@ -890,8 +879,7 @@ Deno.test
 
 		const num = sig(10, NaN);
 		num.subscribe(() => changes.push('num'));
-		assertEquals(changes, ['num']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		// Convert number to string
 		const str = num.convert(n => `Value: ${n}`);
@@ -948,8 +936,7 @@ Deno.test
 
 		const errorSig = sig<number>(new Error('Original error'), NaN);
 		errorSig.subscribe(() => changes.push('errorSig'));
-		assertEquals(changes, ['errorSig']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		// Convert should propagate error
 		const converted = errorSig.convert(n => n * 2);
@@ -1038,8 +1025,7 @@ Deno.test
 
 		const sigA = sig(42);
 		sigA.subscribe(() => changes.push('sig'));
-		assertEquals(changes, ['sig']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		// Set to promise that resolves to same value
 		let resolver: (value: number) => void;
@@ -1718,10 +1704,6 @@ Deno.test
 			}
 		);
 
-		// Initial call with prevValue = undefined
-		assertEquals(prevValues, [undefined]);
-		prevValues.length = 0;
-
 		// Change value
 		sigA.set(20);
 		assertEquals(prevValues, [10]);
@@ -2186,14 +2168,16 @@ Deno.test
 			}
 		);
 
+		sigA.value = 11; // Modify value directly to trigger onChange
+
 		// Initial call
 		assertEquals(receivedThis, sigA);
-		assertEquals(receivedPrevValue, undefined);
+		assertEquals(receivedPrevValue, 10);
 
 		// Change value
 		sigA.set(20);
 		assertEquals(receivedThis, sigA);
-		assertEquals(receivedPrevValue, 10);
+		assertEquals(receivedPrevValue, 11);
 	}
 );
 
@@ -2409,8 +2393,7 @@ Deno.test
 		// Create chain: A -> B -> C -> D
 		const sigA = sig(1, undefined);
 		sigA.subscribe(() => changes.push('A'));
-		assertEquals(changes, ['A']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		const sigB = sig(() => {calc.push('B'); return sigA.value! + 1});
 		sigB.subscribe(() => changes.push('B'));
@@ -2466,8 +2449,7 @@ Deno.test
 		// Create diamond: A -> B, A -> C, B -> D, C -> D
 		const sigA = sig(1, undefined);
 		sigA.subscribe(() => changes.push('A'));
-		assertEquals(changes, ['A']);
-		changes.length = 0;
+		assertEquals(changes.length, 0);
 
 		const sigB = sig(() => {calc.push('B'); return sigA.value! + 1});
 		sigB.subscribe(() => changes.push('B'));
@@ -2581,7 +2563,7 @@ Deno.test
 (	'setConverter must not trigger onChange initially',
 	() =>
 	{	const sigA = sig(5, undefined);
-		const changes = new Array<{v: number|Error|undefined, prevValue: number|Error|undefined}>;
+		const changes = new Array<{prevValue: number|Error|undefined, v: number|Error|undefined}>;
 		const comp = new Array<number|undefined>;
 
 		sigA.setConverter(v => {comp.push(v); return v! * 2});
@@ -2590,16 +2572,12 @@ Deno.test
 
 		sigA.subscribe
 		(	function(prevValue)
-			{	changes.push({v: this.value, prevValue});
+			{	changes.push({prevValue, v: this.value});
 			}
 		);
 
-		assertEquals(comp.length, 1);
-		assertEquals(comp[0], 5);
-
-		assertEquals(changes.length, 1);
-		assertEquals(changes[0].v, 10);
-		assertEquals(changes[0].prevValue, undefined);
+		assertEquals(comp, [5]);
+		assertEquals(changes, [{prevValue: 5, v: 10}]);
 	}
 );
 
@@ -2607,7 +2585,7 @@ Deno.test
 (	'setConverter must not trigger onChange initially - with default value',
 	() =>
 	{	const sigA = sig(5, -1);
-		const changes = new Array<{v: number|Error|undefined, prevValue: number|Error|undefined}>;
+		const changes = new Array<{prevValue: number|Error|undefined, v: number|Error|undefined}>;
 		const comp = new Array<number|undefined>;
 
 		sigA.setConverter(v => {comp.push(v); return v * 2});
@@ -2616,16 +2594,12 @@ Deno.test
 
 		sigA.subscribe
 		(	function(prevValue)
-			{	changes.push({v: this.value, prevValue});
+			{	changes.push({prevValue, v: this.value});
 			}
 		);
 
-		assertEquals(comp.length, 1);
-		assertEquals(comp[0], 5);
-
-		assertEquals(changes.length, 1);
-		assertEquals(changes[0].v, 10);
-		assertEquals(changes[0].prevValue, -1);
+		assertEquals(comp, [5]);
+		assertEquals(changes, [{prevValue: 5, v: 10}]);
 	}
 );
 
@@ -2813,19 +2787,17 @@ Deno.test
 		);
 
 		// subscribe triggers initial call
-		assertEquals(changes.length, 1);
-		assertEquals(changes[0].v, 5);
-		assertEquals(changes[0].prevValue, undefined);
+		assertEquals(changes.length, 0);
 
 		sigA.setConverter(v => v! * 2);
 
 		// setConverter doesn't trigger recomputation
-		assertEquals(changes.length, 1);
+		assertEquals(changes.length, 0);
 
 		sigA.set(8);
-		assertEquals(changes.length, 2);
-		assertEquals(changes[1].v, 16);
-		assertEquals(changes[1].prevValue, 5);
+		assertEquals(changes.length, 1);
+		assertEquals(changes[0].v, 16);
+		assertEquals(changes[0].prevValue, 5);
 	}
 );
 
@@ -3406,7 +3378,7 @@ Deno.test
 		sigB.subscribe(() => changes.push('sigB'));
 		sigC.subscribe(() => changes.push('sigC'));
 		assertEquals(calc, ['sigC']);
-		assertEquals(changes, ['sigA', 'sigB', 'sigC']);
+		assertEquals(changes, ['sigC']); // only sigC is computed signal
 		calc.length = 0;
 		changes.length = 0;
 
@@ -3424,10 +3396,12 @@ Deno.test
 		changes.length = 0;
 
 		// With batch, changes are batched
-		batch(() => {
-			sigA.set(100);
-			sigB.set(200);
-		});
+		batch
+		(	() =>
+			{	sigA.set(100);
+				sigB.set(200);
+			}
+		);
 
 		// sigC should only recompute once
 		assertEquals(calc, ['sigC']);
