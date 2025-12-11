@@ -2604,6 +2604,69 @@ Deno.test
 );
 
 Deno.test
+(	'setConverter must resolve pending computations first',
+	async () =>
+	{	const changes = new Array<{v: number|Error|undefined, prevValue: number|Error|undefined}>;
+		const comp = new Array<number|undefined>;
+
+		let resolver: (v: number) => void;
+		const promise = new Promise<number>(r => {resolver = r});
+		const sigA = sig(promise, undefined);
+
+		sigA.setConverter(v => {comp.push(v); return v! * 2});
+
+		assertEquals(comp.length, 0);
+
+		sigA.subscribe
+		(	function(prevValue)
+			{	changes.push({prevValue, v: this.value});
+			}
+		);
+
+		assertEquals(changes.length, 0);
+		assertEquals(comp.length, 0);
+
+		resolver!(5);
+		await new Promise(r => setTimeout(r, 0));
+
+		assertEquals(comp, [5]);
+		assertEquals(changes, [{prevValue: undefined, v: 10}]);
+	}
+);
+
+Deno.test
+(	'setConverter must not convert error',
+	() =>
+	{	const changes = new Array<{v: number|Error|undefined, prevValue: number|Error|undefined}>;
+		const comp = new Array<number|undefined>;
+
+		const sigA = sig<number|undefined>(new Error('Initial error'));
+
+		sigA.setConverter(v => {comp.push(v); return v! * 2});
+
+		assertEquals(comp.length, 0);
+
+		sigA.subscribe
+		(	function(prevValue)
+			{	changes.push({prevValue, v: this.value});
+			}
+		);
+
+		assertEquals(changes.length, 0);
+		assertEquals(comp.length, 0);
+		assertEquals(sigA.value, undefined);
+		assertEquals(sigA.error.value?.message, 'Initial error');
+
+		sigA.value = 5;
+
+		assertEquals(comp, [5]);
+		assertEquals(changes.length, 1);
+		assertEquals((changes[0].prevValue instanceof Error ? changes[0].prevValue.message : changes[0].prevValue), 'Initial error');
+		assertEquals(changes[0].v, 10);
+	}
+);
+
+Deno.test
 (	'setConverter transforms values',
 	() =>
 	{	const sigA = sig(5, NaN);
