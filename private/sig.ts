@@ -924,6 +924,7 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		{	let newError = !(this.flagsAndOnchangeVersion & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
 			if (bySetter && !newError && this instanceof ValueHolderComp)
 			{	// Try to apply the setter function, catching any errors it throws
+				batchLevel++;
 				try
 				{	this.setValue?.(newValue);
 					// Setter succeeded, now recompute to get the new value
@@ -933,6 +934,9 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 				catch (e)
 				{	// Setter threw an error, treat as error state
 					newError = e instanceof Error ? e : new Error(e+'');
+				}
+				finally
+				{	batchLevel--;
 				}
 			}
 			if (newError)
