@@ -673,8 +673,9 @@ export class Sig<T>
 		Signals normally compute lazily. Adding a listener makes the signal actively
 		recompute whenever dependencies change.
 
-		Adding the first listener to an uncomputed signal triggers immediate computation
-		to establish dependencies. After the computation, the callback can be invoked if the value differs from default.
+		When adding the first listener to a computed signal, whose value is not yet computed or stale,
+		this triggers immediate computation to establish dependencies.
+		After the computation, the callback can be invoked if the value differs from default.
 
 		@param callback Function to call on value changes. Can be a direct reference or WeakRef.
 	 **/
@@ -793,6 +794,10 @@ function removeMyselfAsDepFromUsedSignals<T>(that: Sig<T>)
 	}
 }
 
+/**	Base class for storing signal values and managing their state.
+	Provides core functionality for value storage, retrieval, and updates.
+	Subclasses extend this to handle promises and computed values.
+ **/
 class ValueHolder<T>
 {	constructor
 	(	public flagsAndOnchangeVersion: Flags,
@@ -804,14 +809,28 @@ class ValueHolder<T>
 	{	return this.value;
 	}
 
+	/**	Returns the active promise if this signal is in promise state.
+		For non-promise signals, always returns undefined.
+	 **/
 	getPromise(): Promise<T>|undefined
 	{	return undefined;
 	}
 
+	/**	Returns the Error object if this signal is in error state.
+		For non-error signals, always returns undefined.
+	 **/
 	getError(): Error|undefined
 	{	return undefined;
 	}
 
+	/**	Sets a new value for the signal, potentially converting the ValueHolder type.
+		Converts to ValueHolderComp for functions/signals, ValueHolderPromise for promises/errors.
+
+		@param ownerSig The signal being updated
+		@param compValue New value, promise, computation function, or signal
+		@param cancelComp Optional cancellation callback for async computations
+		@returns Flags indicating what changed (value/promise/error)
+	 **/
 	set(ownerSig: Sig<T>, compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>): CompType
 	{	if (typeof(compValue)=='function' || compValue instanceof Sig)
 		{	const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, undefined, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
@@ -840,10 +859,9 @@ class ValueHolder<T>
 		Performs deep equality checks to determine if change notifications are needed.
 		Schedules onChange callbacks and dependent signal recomputations.
 
-		@param that Signal to update
-		@param newValue New value, promise, or error
+		@param ownerSig Signal to update
+		@param newValue New value (not promise or error for base class)
 		@param knownToBeChanged Skip equality check if we know it changed
-		@param ofValuePromise The promise this value came from (to ignore stale promises)
 		@param bySetter Whether this update came from a setter function
 		@returns Flags indicating what changed (value/promise/error)
 	**/
@@ -862,6 +880,10 @@ class ValueHolder<T>
 	}
 }
 
+/**	ValueHolder that can store promises and errors in addition to regular values.
+	Manages promise resolution, error states, and async cancellation.
+	Used for signals created with promises or that can transition to promise/error states.
+ **/
 class ValueHolderPromise<T> extends ValueHolder<T>
 {	promiseOrError: Promise<T> | Error | undefined;
 
@@ -870,10 +892,16 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		this.promiseOrError = promiseOrError instanceof Promise ? convPromise(promiseOrError) : promiseOrError;
 	}
 
+	/**	Returns the active promise if this signal is in promise state.
+		Used by Sig.promise getter to access the promise without triggering recomputation.
+	 **/
 	override getPromise()
 	{	return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
 	}
 
+	/**	Returns the Error object if this signal is in error state.
+		Used by Sig[_curError] method to access the error without triggering recomputation.
+	 **/
 	override getError()
 	{	return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
 	}
@@ -900,12 +928,12 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		Handles transitions between value/promise/error states.
 		Performs deep equality checks to determine if change notifications are needed.
 		Schedules onChange callbacks and dependent signal recomputations.
+		For promises, sets up resolution handlers to update the signal when resolved/rejected.
 
-		@param that Signal to update
+		@param ownerSig Signal to update
 		@param newValue New value, promise, or error
 		@param knownToBeChanged Skip equality check if we know it changed
-		@param ofValuePromise The promise this value came from (to ignore stale promises)
-		@param bySetter Whether this update came from a setter function
+		@param bySetter Whether this update came from a setter function (triggers setValue callback)
 		@returns Flags indicating what changed (value/promise/error)
 	**/
 	override doSetValue(ownerSig: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, bySetter=false): CompType
@@ -988,16 +1016,32 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 	}
 }
 
+/**	ValueHolder for computed signals with computation functions.
+	Manages lazy recomputation, dependency tracking, and optional setter functions.
+	Automatically recomputes when dependencies change or when accessed if stale.
+ **/
 class ValueHolderComp<T> extends ValueHolderPromise<T>
 {	constructor(flagsAndOnchangeVersion: Flags, prevValue: T, defaultValue: T, prevPromiseOrError: Promise<T>|Error|undefined, cancelComp: CancelComp<T>|undefined, public compValue: Sig<T>|CompValue<T>, public setValue?: SetValue<T>)
 	{	super(flagsAndOnchangeVersion, prevValue, defaultValue, prevPromiseOrError, cancelComp);
 	}
 
+	/**	Gets the signal's value, triggering recomputation if needed.
+		This ensures computed signals are always up-to-date when accessed.
+	 **/
 	override get(ownerSig: Sig<T>)
 	{	this.recomp(ownerSig);
 		return this.value;
 	}
 
+	/**	Sets a new value or computation for a computed signal.
+		If this signal has a setValue callback, invokes it and triggers recomputation.
+		Otherwise, allows replacing the computation function or converting to static/promise signal.
+
+		@param ownerSig The signal being updated
+		@param compValue New value, promise, computation function, or signal
+		@param cancelComp Optional cancellation callback for async computations
+		@returns Flags indicating what changed (value/promise/error)
+	 **/
 	override set(ownerSig: Sig<T>, compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>): CompType
 	{	if (this.setValue)
 		{	if (typeof(compValue)=='function' || compValue instanceof Sig)
@@ -1027,14 +1071,13 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 
 	/**	Recomputes a signal's value if it needs recomputation.
 		This is the core computation function that:
-		1. Registers dependency tracking
+		1. Checks if recomputation is needed (WantRecomp flag)
 		2. Removes old dependencies
-		3. Executes the computation function
+		3. Executes the computation function with dependency tracking
 		4. Establishes new dependencies
 		5. Updates the value and triggers notifications
 
-		@param that Signal to recompute
-		@param compType Which aspect is being accessed (for dependency tracking)
+		@param ownerSig Signal to recompute
 		@param knownToBeChanged Whether we know the value changed (skips equality check)
 		@param cause The signal that triggered this recomputation (for debugging)
 		@param noCancelComp Skip calling the cancel function for pending promises
@@ -1146,6 +1189,13 @@ function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
 	return that[_valueHolder].flagsAndOnchangeVersion & Flags.HasOnChangePositive;
 }
 
+/**	Unwraps a non-promise value that might be a signal or error.
+	If the value is a signal, extracts its promise, error, or current value.
+	Used when computation functions return signals or errors directly.
+
+	@param result Value that might be a signal, error, or regular value
+	@returns The unwrapped value or error
+ **/
 function convNonPromise<T>(result: Value<T>)
 {	return result instanceof Sig ? result.promise ?? result[_curError]() ?? result.value : result;
 }
