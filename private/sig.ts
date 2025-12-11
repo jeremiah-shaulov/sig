@@ -418,7 +418,7 @@ export class Sig<T>
 		Alias for the `set()` method.
 	 **/
 	set value(value: ValueOrPromise<T>|CompValue<T>)
-	{	this.set(value);
+	{	this[_valueHolder].set(this, value);
 	}
 
 	/**	Sets a new value for the signal.
@@ -433,57 +433,7 @@ export class Sig<T>
 		@param cancelComp Optional callback to cancel an ongoing async computation when new computation starts. Only used when `compValue` is a computation function. If not provided, any existing cancelation callback is removed.
 	 **/
 	set(compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>)
-	{	const valueHolder = this[_valueHolder];
-		if (valueHolder instanceof ValueHolderComp && valueHolder.setValue)
-		{	if (typeof(compValue)=='function' || compValue instanceof Sig)
-			{	throw new Error('Cannot override computation function for signals with value setters');
-			}
-			valueHolder.doSetValue(this, compValue instanceof Promise ? convPromise(compValue) : compValue, false, true) && flushPendingOnChange();
-		}
-		else
-		{	// Cancel the current computation with the OLD cancelComp before replacing it
-			if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError instanceof Promise)
-			{	valueHolder.cancelComp?.(valueHolder.promiseOrError);
-			}
-			if (typeof(compValue)=='function' || compValue instanceof Sig)
-			{	if (!(valueHolder instanceof ValueHolderPromise))
-				{	this[_valueHolder] = new ValueHolderComp(valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, valueHolder.value, valueHolder.defaultValue, undefined, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
-				}
-				else if (!(valueHolder instanceof ValueHolderComp))
-				{	this[_valueHolder] = new ValueHolderComp(valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, valueHolder.value, valueHolder.defaultValue, valueHolder.promiseOrError, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
-				}
-				else
-				{	valueHolder.compValue = compValue as Sig<T>|CompValue<T>;
-					valueHolder.cancelComp = compValue instanceof Sig ? undefined : cancelComp;
-					valueHolder.flagsAndOnchangeVersion = valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp;
-				}
-				(this[_valueHolder] as ValueHolderComp<T>).recomp(this, false, undefined, true) && flushPendingOnChange();
-			}
-			else if (compValue instanceof Promise)
-			{	if (valueHolder instanceof ValueHolderComp)
-				{	this[_valueHolder] = new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask, valueHolder.value, valueHolder.defaultValue, valueHolder.promiseOrError, cancelComp);
-				}
-				else if (!(valueHolder instanceof ValueHolderPromise))
-				{	this[_valueHolder] = new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask, valueHolder.value, valueHolder.defaultValue, undefined, cancelComp);
-				}
-				else
-				{	valueHolder.cancelComp = cancelComp;
-				}
-				(this[_valueHolder] as ValueHolderPromise<T>).doSetValue(this, convPromise(compValue)) && flushPendingOnChange();
-			}
-			else
-			{	if (valueHolder instanceof ValueHolderComp)
-				{	this[_valueHolder] = new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask, valueHolder.value, valueHolder.defaultValue, valueHolder.promiseOrError);
-				}
-				else if (!(valueHolder instanceof ValueHolderPromise))
-				{	this[_valueHolder] = new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask, valueHolder.value, valueHolder.defaultValue);
-				}
-				else
-				{	valueHolder.cancelComp = undefined;
-				}
-				(this[_valueHolder] as ValueHolderPromise<T>).doSetValue(this, compValue) && flushPendingOnChange();
-			}
-		}
+	{	this[_valueHolder].set(this, compValue, cancelComp);
 	}
 
 	/**	Returns a Proxy-wrapped version of this signal providing the `ThisSig` interface.
@@ -860,6 +810,24 @@ class ValueHolder<T>
 	{	return undefined;
 	}
 
+	set(ownerSig: Sig<T>, compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>)
+	{	if (typeof(compValue)=='function' || compValue instanceof Sig)
+		{	const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, undefined, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
+			ownerSig[_valueHolder] = newValueHolder;
+			newValueHolder.recomp(ownerSig, false, undefined, true) && flushPendingOnChange();
+		}
+		else if (compValue instanceof Promise)
+		{	const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, undefined, cancelComp);
+			ownerSig[_valueHolder] = newValueHolder;
+			newValueHolder.doSetValue(ownerSig, convPromise(compValue)) && flushPendingOnChange();
+		}
+		else
+		{	const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue);
+			ownerSig[_valueHolder] = newValueHolder;
+			newValueHolder.doSetValue(ownerSig, compValue) && flushPendingOnChange();
+		}
+	}
+
 	recomp(_ownerSig: Sig<T>, _knownToBeChanged=false, _cause?: Sig<unknown>, _noCancelComp=false): CompType
 	{	return CompType.None;
 	}
@@ -879,6 +847,26 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 
 	override getError()
 	{	return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
+	}
+
+	override set(ownerSig: Sig<T>, compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>)
+	{	// Cancel the current computation with the OLD cancelComp before replacing it
+		if (this.promiseOrError instanceof Promise)
+		{	this.cancelComp?.(this.promiseOrError);
+		}
+		if (typeof(compValue)=='function' || compValue instanceof Sig)
+		{	const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, this.promiseOrError, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
+			ownerSig[_valueHolder] = newValueHolder;
+			newValueHolder.recomp(ownerSig, false, undefined, true) && flushPendingOnChange();
+		}
+		else if (compValue instanceof Promise)
+		{	this.cancelComp = cancelComp;
+			this.doSetValue(ownerSig, convPromise(compValue)) && flushPendingOnChange();
+		}
+		else
+		{	this.cancelComp = undefined;
+			this.doSetValue(ownerSig, compValue) && flushPendingOnChange();
+		}
 	}
 
 	/**	Updates a signal's value and manages state transitions.
@@ -981,6 +969,37 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 	override get(ownerSig: Sig<T>)
 	{	this.recomp(ownerSig);
 		return this.value;
+	}
+
+	override set(ownerSig: Sig<T>, compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>)
+	{	if (this.setValue)
+		{	if (typeof(compValue)=='function' || compValue instanceof Sig)
+			{	throw new Error('Cannot override computation function for signals with value setters');
+			}
+			this.doSetValue(ownerSig, compValue instanceof Promise ? convPromise(compValue) : compValue, false, true) && flushPendingOnChange();
+		}
+		else
+		{	// Cancel the current computation with the OLD cancelComp before replacing it
+			if (this.promiseOrError instanceof Promise)
+			{	this.cancelComp?.(this.promiseOrError);
+			}
+			if (typeof(compValue)=='function' || compValue instanceof Sig)
+			{	this.compValue = compValue as Sig<T>|CompValue<T>;
+				this.cancelComp = compValue instanceof Sig ? undefined : cancelComp;
+				this.flagsAndOnchangeVersion = this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp;
+				this.recomp(ownerSig, false, undefined, true) && flushPendingOnChange();
+			}
+			else if (compValue instanceof Promise)
+			{	const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.promiseOrError, cancelComp);
+				ownerSig[_valueHolder] = newValueHolder;
+				newValueHolder.doSetValue(ownerSig, convPromise(compValue)) && flushPendingOnChange();
+			}
+			else
+			{	const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.promiseOrError);
+				ownerSig[_valueHolder] = newValueHolder;
+				newValueHolder.doSetValue(ownerSig, compValue) && flushPendingOnChange();
+			}
+		}
 	}
 
 	/**	Recomputes a signal's value if it needs recomputation.
