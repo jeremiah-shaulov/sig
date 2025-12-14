@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.12"
+import {Sig} from "jsr:@shaulov/sig@0.0.13"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
@@ -195,11 +195,12 @@ For rejected Promises, no notification occurs.
 [busy](#-get-busy-sigboolean),
 [error](#-get-error-sigerror),
 [default](#-get-default-t)
-- 8 methods:
+- 9 methods:
 [set](#-setcompvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-void),
 [convert](#-convertv-dvcompvalue-value-t--valueorpromisev-defaultvalue-d-setvalue-setvaluev--d-cancelcomp-cancelcompv--d-sigd-extends-v--v--v--d),
 [convert](#-convertvcompvalue-value-t--valueorpromisev-sigv),
 [setConverter](#-setconvertercompvalue-value-t--valueorpromiset-void),
+[unsetConverter](#-unsetconverter-void),
 [subscribe](#-subscribecallback-onchanget--weakrefonchanget-void),
 [unsubscribe](#-unsubscribecallback-onchanget--weakrefonchanget-void),
 [toJSON](#-tojson-t),
@@ -390,6 +391,31 @@ For rejected Promises, no notification occurs.
 > sigA.value = -15;
 > console.log(sigA.value); // -15
 > ```
+
+
+
+#### ⚙ unsetConverter(): `void`
+
+> Removes a previously set converter function, reverting the signal to a regular signal.
+> If the signal has a converter set via [setConverter()](../class.Sig/README.md#-setconvertercompvalue-value-t--valueorpromiset-void), this method removes it
+> and restores the signal to its pre-converter state with the current computed value.
+> 
+> After calling this method, the signal behaves as a regular static signal,
+> and `set()` calls will directly replace the value instead of invoking the converter.
+> 
+> ```ts
+> const sigA = sig(5);
+> sigA.setConverter(v => v * 2);
+> console.log(sigA.value); // 10
+> 
+> sigA.unsetConverter();
+> console.log(sigA.value); // 10 (still the converted value)
+> 
+> sigA.value = 7;
+> console.log(sigA.value); // 7 (no longer doubled)
+> ```
+> 
+> If no converter is set, this method has no effect.
 
 
 
