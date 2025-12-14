@@ -951,13 +951,15 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 			// Set up handlers to update signal when promise resolves or rejects
 			promise.then
 			(	v =>
-				{	if (this.promiseOrError == promise) // ignore result of old promise if `that.valuePromise` was set to a new promise
-					{	this.doSetValue(ownerSig, v, knownToBeChanged, bySetter) && flushPendingOnChange();
+				{	const valueHolder = ownerSig[_valueHolder]; // the value holder could have changed since the promise was set
+					if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError==promise) // ignore result of old promise if `promiseOrError` was set to a new promise
+					{	valueHolder.doSetValue(ownerSig, v, knownToBeChanged, bySetter) && flushPendingOnChange();
 					}
 				},
 				e =>
-				{	if (this.promiseOrError == promise) // ignore result of old promise if `that.valuePromise` was set to a new promise
-					{	this.doSetValue(ownerSig, e instanceof Error ? e : new Error(e+''), knownToBeChanged, bySetter) && flushPendingOnChange();
+				{	const valueHolder = ownerSig[_valueHolder]; // the value holder could have changed since the promise was set
+					if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError==promise) // ignore result of old promise if `promiseOrError` was set to a new promise
+					{	valueHolder.doSetValue(ownerSig, e instanceof Error ? e : new Error(e+''), knownToBeChanged, bySetter) && flushPendingOnChange();
 					}
 				}
 			);
