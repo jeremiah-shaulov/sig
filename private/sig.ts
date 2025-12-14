@@ -656,7 +656,7 @@ export class Sig<T>
 		const curPromiseOrError = valueHolder instanceof ValueHolderPromise ? valueHolder.promiseOrError : undefined;
 		const backingSig = new Sig(new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & Flags.FlagsMask, valueHolder.value, valueHolder.defaultValue, curPromiseOrError));
 		// Convert this signal to a computed signal that applies the converter
-		const newValueHolder = new ValueHolderComp<T>
+		this[_valueHolder] = new ValueHolderComp<T>
 		(	valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp,
 			valueHolder.value,
 			valueHolder.defaultValue,
@@ -665,7 +665,6 @@ export class Sig<T>
 			() => sigConvert(backingSig, compValue),
 			(newValue: T) => backingSig.set(newValue)
 		);
-		this[_valueHolder] = newValueHolder;
 	}
 
 	/**	Registers a callback invoked when the signal's value changes.
