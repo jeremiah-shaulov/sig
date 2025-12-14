@@ -654,9 +654,9 @@ export class Sig<T>
 	{	// Create a backing signal to hold the raw value
 		const valueHolder = this[_valueHolder];
 		const curPromiseOrError = valueHolder instanceof ValueHolderPromise ? valueHolder.promiseOrError : undefined;
-		const backingSig = new Sig(new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & Flags.FlagsMask, valueHolder.value, valueHolder.defaultValue, curPromiseOrError));
+		const backingSig = new Sig(new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & Flags.FlagsMask, valueHolder.get(this), valueHolder.defaultValue, curPromiseOrError));
 		// Convert this signal to a computed signal that applies the converter
-		this[_valueHolder] = new ValueHolderComp<T>
+		this[_valueHolder] = new ValueHolderConv<T>
 		(	valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp,
 			valueHolder.value,
 			valueHolder.defaultValue,
@@ -665,6 +665,34 @@ export class Sig<T>
 			() => sigConvert(backingSig, compValue),
 			(newValue: T) => backingSig.set(newValue)
 		);
+	}
+
+	/**	Removes a previously set converter function, reverting the signal to a regular signal.
+		If the signal has a converter set via {@link setConverter()}, this method removes it
+		and restores the signal to its pre-converter state with the current computed value.
+
+		After calling this method, the signal behaves as a regular static signal,
+		and `set()` calls will directly replace the value instead of invoking the converter.
+
+		```ts
+		const sigA = sig(5);
+		sigA.setConverter(v => v * 2);
+		console.log(sigA.value); // 10
+
+		sigA.unsetConverter();
+		console.log(sigA.value); // 10 (still the converted value)
+
+		sigA.value = 7;
+		console.log(sigA.value); // 7 (no longer doubled)
+		```
+
+		If no converter is set, this method has no effect.
+	 **/
+	unsetConverter()
+	{	const valueHolder = this[_valueHolder];
+		if (valueHolder instanceof ValueHolderConv)
+		{	this[_valueHolder] = new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & Flags.FlagsMask, valueHolder.get(this), valueHolder.defaultValue, valueHolder.promiseOrError);
+		}
 	}
 
 	/**	Registers a callback invoked when the signal's value changes.
@@ -1111,6 +1139,10 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		}
 		return CompType.None;
 	}
+}
+
+class ValueHolderConv<T> extends ValueHolderComp<T>
+{
 }
 
 /**	Resumes dependency tracking after an async await point.

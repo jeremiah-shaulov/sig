@@ -2864,6 +2864,205 @@ Deno.test
 	}
 );
 
+// Tests for unsetConverter feature
+
+Deno.test
+(	'unsetConverter removes converter',
+	() =>
+	{	const sigA = sig(5, NaN);
+		sigA.setConverter(v => v * 2);
+
+		assertEquals(sigA.value, 10); // Initial value transformed
+
+		sigA.unsetConverter();
+
+		assertEquals(sigA.value, 10); // Still has the converted value
+
+		sigA.set(7);
+		assertEquals(sigA.value, 7); // No longer transformed
+	}
+);
+
+Deno.test
+(	'unsetConverter on signal without converter has no effect',
+	() =>
+	{	const sigA = sig(5, NaN);
+
+		assertEquals(sigA.value, 5);
+
+		sigA.unsetConverter(); // Should not throw
+
+		assertEquals(sigA.value, 5);
+
+		sigA.set(7);
+		assertEquals(sigA.value, 7);
+	}
+);
+
+Deno.test
+(	'unsetConverter preserves error state',
+	() =>
+	{	const sigA = sig(5, NaN);
+		sigA.setConverter
+		(	v =>
+			{	if (v > 10)
+				{	return new Error('Too large');
+				}
+				return v * 2;
+			}
+		);
+
+		sigA.set(15);
+		assertEquals(sigA.error.value?.message, 'Too large');
+
+		sigA.unsetConverter();
+
+		assertEquals(sigA.error.value?.message, 'Too large'); // Error preserved
+
+		sigA.set(7);
+		assertEquals(sigA.value, 7); // Now accepts value without validation
+	}
+);
+
+Deno.test
+(	'unsetConverter after promise resolves',
+	async () =>
+	{	let resolver: (v: number) => void;
+		const promise = new Promise<number>(r => {resolver = r});
+
+		const sigA = sig(promise, NaN);
+		sigA.setConverter(v => v * 2);
+
+		assertEquals(sigA.busy.value, true);
+
+		resolver!(5);
+		await sigA.promise;
+
+		assertEquals(sigA.value, 10); // Transformed
+
+		sigA.unsetConverter();
+
+		assertEquals(sigA.value, 10); // Still has converted value
+		assertEquals(sigA.busy.value, false);
+
+		sigA.set(7);
+		assertEquals(sigA.value, 7); // No longer transformed
+	}
+);
+
+Deno.test
+(	'unsetConverter with async converter',
+	async () =>
+	{	const sigA = sig(5, NaN);
+		sigA.setConverter
+		(	async v =>
+			{	await new Promise(resolve => setTimeout(resolve, 10));
+				return v * 2;
+			}
+		);
+
+		assertEquals(sigA.busy.value, true);
+		await sigA.promise;
+		assertEquals(sigA.value, 10);
+
+		sigA.unsetConverter();
+
+		assertEquals(sigA.value, 10); // Converted value preserved
+
+		sigA.set(7);
+		assertEquals(sigA.value, 7); // No longer async or transformed
+		assertEquals(sigA.busy.value, false);
+	}
+);
+
+Deno.test
+(	'unsetConverter triggers onChange correctly',
+	() =>
+	{	const sigA = sig(5, NaN);
+		const changes: Array<{v: number, prevValue: number|Error}> = [];
+
+		sigA.setConverter(v => v * 2);
+
+		sigA.subscribe
+		(	function(prevValue)
+			{	changes.push({v: this.value, prevValue: prevValue as number|Error});
+			}
+		);
+
+		assertEquals(changes.length, 1); // Initial subscription with transformed value
+		assertEquals(changes[0].v, 10);
+		assertEquals(changes[0].prevValue, 5);
+		changes.length = 0;
+
+		sigA.unsetConverter();
+
+		assertEquals(changes.length, 0); // unsetConverter doesn't trigger onChange
+
+		sigA.set(7);
+		assertEquals(changes.length, 1);
+		assertEquals(changes[0].v, 7);
+		assertEquals(changes[0].prevValue, 10);
+	}
+);
+
+Deno.test
+(	'unsetConverter can be called multiple times',
+	() =>
+	{	const sigA = sig(5, NaN);
+		sigA.setConverter(v => v * 2);
+
+		assertEquals(sigA.value, 10);
+
+		sigA.unsetConverter();
+		assertEquals(sigA.value, 10);
+
+		sigA.unsetConverter(); // Should not throw
+		assertEquals(sigA.value, 10);
+
+		sigA.set(7);
+		assertEquals(sigA.value, 7);
+	}
+);
+
+Deno.test
+(	'setConverter after unsetConverter works',
+	() =>
+	{	const sigA = sig(5, NaN);
+		sigA.setConverter(v => v * 2);
+
+		assertEquals(sigA.value, 10);
+
+		sigA.unsetConverter();
+		assertEquals(sigA.value, 10);
+
+		sigA.setConverter(v => v * 3);
+		assertEquals(sigA.value, 30); // New converter applied to current value
+
+		sigA.set(4);
+		assertEquals(sigA.value, 12); // 4 * 3
+	}
+);
+
+Deno.test
+(	'unsetConverter preserves default value',
+	() =>
+	{	const sigA = sig(5, -1);
+		sigA.setConverter(v => v * 2);
+
+		assertEquals(sigA.value, 10);
+		assertEquals(sigA.default, -1);
+
+		sigA.unsetConverter();
+
+		assertEquals(sigA.value, 10);
+		assertEquals(sigA.default, -1); // Default preserved
+
+		sigA.set(new Error('Test error'));
+		assertEquals(sigA.value, -1); // Uses default
+		assertEquals(sigA.error.value?.message, 'Test error');
+	}
+);
+
 // Tests for sync() feature with async computations
 
 Deno.test
