@@ -8,21 +8,23 @@ Subclasses extend this to handle promises and computed values.
 
 ## This class has
 
-- [constructor](#-constructorflagsandonchangeversion-flags-value-t-defaultvalue-t)
-- 3 properties:
+- [constructor](#-constructorflagsandonchangeversion-flags-value-t-defaultvalue-t-dependonme-dependonme-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown-id-numberidenum)
+- 6 properties:
 [flagsAndOnchangeVersion](#-flagsandonchangeversion-flags),
 [value](#-value-t),
-[defaultValue](#-defaultvalue-t)
-- 6 methods:
+[defaultValue](#-defaultvalue-t),
+[dependOnMe](#-dependonme-dependonme),
+[onChangeCallbacks](#-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown),
+[id](#-id-number)
+- 5 methods:
 [get](#-get_ownersig-sigt-t),
 [getPromise](#-getpromise-promiset),
 [getError](#-geterror-error),
 [set](#-setownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype),
-[recomp](#-recomp_ownersig-sigt-_knowntobechanged-booleanfalse-_cause-sigunknown-_nocancelcomp-booleanfalse-comptype),
 [doSetValue](#-dosetvalueownersig-sigt-newvalue-t-knowntobechanged-booleanfalse-comptype)
 
 
-#### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), value: T, defaultValue: T)
+#### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), value: T, defaultValue: T, dependOnMe?: [DependOnMe](../private.type.DependOnMe/README.md), onChangeCallbacks?: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>>, id: `number`=idEnum++)
 
 
 
@@ -35,6 +37,25 @@ Subclasses extend this to handle promises and computed values.
 
 
 #### 📄 defaultValue: T
+
+
+
+#### 📄 dependOnMe?: [DependOnMe](../private.type.DependOnMe/README.md)
+
+> Weakly-referenced list of signals that depend on this signal.
+> When this signal changes, these dependent signals are marked for recomputation.
+
+
+
+#### 📄 onChangeCallbacks?: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>>
+
+> Callbacks to invoke when the signal's value changes.
+
+
+
+#### 📄 id: `number`
+
+> Unique identifier for each signal instance, used in dependency tracking maps.
 
 
 
@@ -76,10 +97,6 @@ Subclasses extend this to handle promises and computed values.
 > ✔️ Return value:
 > 
 > Flags indicating what changed (value/promise/error)
-
-
-
-#### ⚙ recomp(\_ownerSig: [Sig](../class.Sig/README.md)\<T>, \_knownToBeChanged: `boolean`=false, \_cause?: [Sig](../class.Sig/README.md)\<`unknown`>, \_noCancelComp: `boolean`=false): [CompType](../private.enum.CompType/README.md)
 
 
 
