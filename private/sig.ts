@@ -650,7 +650,6 @@ export class Sig<T>
 			curPromiseOrError,
 			undefined,
 			() => sigConvert(backingSig, compValue),
-			undefined,
 			(newValue: T) => backingSig.set(newValue)
 		);
 	}
@@ -763,9 +762,8 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 			// Add bidirectional dependency links
 			that[_valueHolder].dependOnMe ??= new Map;
 			that[_valueHolder].dependOnMe.set(evalContext[_valueHolder].id, {subj: new WeakRef(evalContext), compType});
-			if (!evalContext[_valueHolder].iDependOn?.includes(that))
-			{	evalContext[_valueHolder].iDependOn ??= [];
-				evalContext[_valueHolder].iDependOn.push(that);
+			if (!evalContext[_valueHolder].iDependOn.includes(that))
+			{	evalContext[_valueHolder].iDependOn.push(that);
 			}
 		}
 		else
@@ -783,7 +781,7 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 	@param visited Set of already-visited signals to avoid infinite loops
 	@returns true if circular dependency detected, false otherwise
  **/
-function checkCircular<T>(that: ValueHolderComp<T>, target: ValueHolderComp<Any>, visited=new Set<ValueHolderComp<Any>>): boolean|undefined
+function checkCircular<T>(that: ValueHolderComp<T>, target: ValueHolderComp<Any>, visited=new Set<ValueHolderComp<Any>>): boolean
 {	if (that === target)
 	{	return true;
 	}
@@ -791,7 +789,7 @@ function checkCircular<T>(that: ValueHolderComp<T>, target: ValueHolderComp<Any>
 	{	return false;
 	}
 	visited.add(that);
-	return that.iDependOn?.some(dep => dep[_valueHolder] instanceof ValueHolderComp && checkCircular(dep[_valueHolder], target, visited));
+	return that.iDependOn.some(dep => dep[_valueHolder] instanceof ValueHolderComp && checkCircular(dep[_valueHolder], target, visited));
 }
 
 /**	Removes this signal from the dependent list of all signals it depends on.
@@ -801,12 +799,10 @@ function checkCircular<T>(that: ValueHolderComp<T>, target: ValueHolderComp<Any>
 	@param that The signal whose dependencies should be cleared
  **/
 function removeMyselfAsDepFromUsedSignals<T>(that: ValueHolderComp<T>)
-{	if (that.iDependOn)
-	{	for (const usedSig of that.iDependOn)
-		{	usedSig[_valueHolder].dependOnMe?.delete(that.id);
-		}
-		that.iDependOn.length = 0;
+{	for (const usedSig of that.iDependOn)
+	{	usedSig[_valueHolder].dependOnMe?.delete(that.id);
 	}
+	that.iDependOn.length = 0;
 }
 
 type DependOnMe = Map<number, {subj: WeakRef<SigComp<unknown>>, compType: CompType}>;
@@ -1058,7 +1054,12 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 	Automatically recomputes when dependencies change or when accessed if stale.
  **/
 class ValueHolderComp<T> extends ValueHolderPromise<T>
-{	constructor
+{	/**	Signals that this signal depends on, along with what aspects (value/promise/error) were observed.
+		When a dependency changes, we check if the observed aspect changed to determine if recomputation is needed.
+	 **/
+	iDependOn = new Array<Sig<Any>>;
+
+	constructor
 	(	flagsAndOnchangeVersion: Flags,
 		prevValue: T,
 		defaultValue: T,
@@ -1068,10 +1069,6 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		prevPromiseOrError: Promise<T>|Error|undefined,
 		cancelComp: CancelComp<T>|undefined,
 		public compValue: Sig<T>|CompValue<T>,
-		/**	Signals that this signal depends on, along with what aspects (value/promise/error) were observed.
-			When a dependency changes, we check if the observed aspect changed to determine if recomputation is needed.
-		**/
-		public iDependOn?: Sig<Any>[],
 		public setValue?: SetValue<T>
 	)
 	{	super(flagsAndOnchangeVersion, prevValue, defaultValue, dependOnMe, onChangeCallbacks, id, prevPromiseOrError, cancelComp);
@@ -1428,7 +1425,7 @@ export function sig<T>(...args: undefined extends T ? [Error?] : never): Sig<T>;
 
 export function sig<T>(compValue?: ValueOrPromise<T>|CompValue<T>, defaultValue?: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>): Sig<T>
 {	if (typeof(compValue)=='function' || compValue instanceof Sig)
-	{	const valueHolder: ValueHolder<T> = new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, undefined, idEnum++, undefined, cancelComp, compValue as CompValue<T>, undefined, setValue);
+	{	const valueHolder: ValueHolder<T> = new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, undefined, idEnum++, undefined, cancelComp, compValue as CompValue<T>, setValue);
 		return new Sig(valueHolder);
 	}
 	if (compValue instanceof Promise || compValue instanceof Error)
