@@ -556,16 +556,22 @@ export class Sig<T>
 		Useful for reactively tracking async computation state.
 	 **/
 	get busy(): Sig<boolean>
-	{	const valueHolder: ValueHolder<boolean> = new ValueHolderComp(Flags.WantRecomp, false, false, undefined, undefined, () => !!this.promise);
-		return this.#busySig ??= new Sig(valueHolder);
+	{	if (!this.#busySig)
+		{	const valueHolder: ValueHolder<boolean> = new ValueHolderComp(Flags.WantRecomp, false, false, undefined, undefined, () => !!this.promise);
+			this.#busySig = new Sig(valueHolder);
+		}
+		return this.#busySig;
 	}
 
 	/**	Returns a signal containing the Error object when in error state, otherwise `undefined`.
 		This signal itself is never in promise state.
 	 **/
 	get error(): Sig<Error|undefined>
-	{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, () => this[_curError]());
-		return this.#errorSig ??= new Sig(valueHolder);
+	{	if (!this.#errorSig)
+		{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, () => this[_curError]());
+			this.#errorSig = new Sig(valueHolder);
+		}
+		return this.#errorSig;
 	}
 
 	/**	Returns the default value of the signal, as provided when the signal was created.
