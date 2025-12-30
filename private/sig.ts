@@ -710,7 +710,7 @@ export class Sig<T>
 	{	const onChangeCallbacks = this[_onChangeCallbacks];
 		if (onChangeCallbacks)
 		{	const callbackFunc = callback instanceof WeakRef ? callback.deref() : callback;
-			if (traverseWeak(onChangeCallbacks).some(c => c == callbackFunc))
+			if (traverseWeak(onChangeCallbacks).some(c => c === callbackFunc))
 			{	return;
 			}
 			onChangeCallbacks.push(callback as Any);
@@ -732,7 +732,7 @@ export class Sig<T>
 		{	const callbackFunc = callback instanceof WeakRef ? callback.deref() : callback;
 			for (let i=0; i<onChangeCallbacks.length; i++)
 			{	const cb = onChangeCallbacks[i];
-				if (cb instanceof WeakRef ? cb.deref()==callbackFunc : cb==callbackFunc)
+				if (cb instanceof WeakRef ? cb.deref()===callbackFunc : cb===callbackFunc)
 				{	onChangeCallbacks[i] = onChangeCallbacks[onChangeCallbacks.length - 1];
 					onChangeCallbacks.length--;
 					hasOnchangeVersion += Flags.OnChangeVersionStep;
@@ -796,7 +796,7 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 	@returns true if circular dependency detected, false otherwise
  **/
 function checkCircular<T>(that: Sig<T>, target: Sig<Any>, visited=new Set<Sig<Any>>): boolean|undefined
-{	if (that == target)
+{	if (that === target)
 	{	return true;
 	}
 	if (visited.has(that))
@@ -980,13 +980,13 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 			promise.then
 			(	v =>
 				{	const valueHolder = ownerSig[_valueHolder]; // the value holder could have changed since the promise was set
-					if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError==promise) // ignore result of old promise if `promiseOrError` was set to a new promise
+					if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError===promise) // ignore result of old promise if `promiseOrError` was set to a new promise
 					{	valueHolder.doSetValue(ownerSig, v, knownToBeChanged, bySetter) && flushPendingOnChange();
 					}
 				},
 				e =>
 				{	const valueHolder = ownerSig[_valueHolder]; // the value holder could have changed since the promise was set
-					if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError==promise) // ignore result of old promise if `promiseOrError` was set to a new promise
+					if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError===promise) // ignore result of old promise if `promiseOrError` was set to a new promise
 					{	valueHolder.doSetValue(ownerSig, e instanceof Error ? e : new Error(e+''), knownToBeChanged, bySetter) && flushPendingOnChange();
 					}
 				}
@@ -1018,7 +1018,7 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 				else if (!prevError)
 				{	changeType = CompType.Value|CompType.Error; // value -> error
 				}
-				else if (newError.constructor!=prevError.constructor || newError.message!=prevError.message)
+				else if (newError.constructor!==prevError.constructor || newError.message!==prevError.message)
 				{	changeType = CompType.Error; // error -> error
 				}
 			}
@@ -1153,7 +1153,7 @@ class ValueHolderConv<T> extends ValueHolderComp<T>
  **/
 function sigSync<T>(that: Sig<T>)
 {	const compSubj = that as Sig<unknown>;
-	if (compSubj != evalContext)
+	if (compSubj !== evalContext)
 	{	const prevEvalContext = evalContext;
 		evalContext = compSubj;
 		that[_valueHolder].flagsAndOnchangeVersion = Flags.RecompInProgress | (that[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
@@ -1180,7 +1180,7 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 {	const onChangeCallbacks = that[_onChangeCallbacks];
 	if (onChangeCallbacks)
 	{	for (const callback of traverseWeak(onChangeCallbacks))
-		{	if (!pendingOnChange.some(p => p.callback==callback))
+		{	if (!pendingOnChange.some(p => p.callback===callback))
 			{	pendingOnChange.push({callback, thisArg: that, prevValue});
 			}
 		}
@@ -1193,7 +1193,7 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 			}
 			else if ((compType & changeType) && dep[_valueHolder] instanceof ValueHolderComp && (dep[_valueHolder].flagsAndOnchangeVersion & Flags.ValueStatusMask) != Flags.RecompInProgress)
 			{	dep[_valueHolder].flagsAndOnchangeVersion = Flags.WantRecomp | (dep[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
-				if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj == dep))
+				if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj === dep))
 				{	pendingRecomp.push({subj: dep as Any, knownToBeChanged, cause: that});
 				}
 			}
@@ -1291,7 +1291,7 @@ function getProp<T>(that: Sig<T>, propName: string|symbol): Sig<unknown>
 		propValue =>
 		{	const {value} = parent;
 			const obj = followPath(value, path, path.length-1);
-			if (obj!=null && typeof(obj)=='object' && !deepEquals(obj[path[path.length - 1]], propValue))
+			if (obj!==null && typeof(obj)=='object' && !deepEquals(obj[path[path.length - 1]], propValue))
 			{	obj[path[path.length - 1]] = propValue;
 				invokeOnChangeCallbacks(parent, CompType.Value, value, true);
 			}
