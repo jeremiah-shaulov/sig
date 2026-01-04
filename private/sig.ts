@@ -62,6 +62,7 @@ const enum Flags
 	their dependencies to the appropriate parent computation.
  **/
 let evalContext: SigComp<unknown> | undefined;
+let evalContextWeak: WeakRef<SigComp<unknown>> | undefined;
 
 /**	Callbacks scheduled to be invoked when signals change.
 	These are batched and executed during the flush cycle to ensure consistent state.
@@ -760,8 +761,9 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 			{	throw new Error('Circular dependency detected between signals');
 			}
 			// Add bidirectional dependency links
+			evalContextWeak ??= new WeakRef(evalContext);
 			that[_valueHolder].dependOnMe ??= new Map;
-			that[_valueHolder].dependOnMe.set(evalContext[_valueHolder].id, {subj: new WeakRef(evalContext), compType});
+			that[_valueHolder].dependOnMe.set(evalContext[_valueHolder].id, {subj: evalContextWeak, compType});
 			if (!evalContext[_valueHolder].iDependOn.includes(that))
 			{	evalContext[_valueHolder].iDependOn.push(that);
 			}
@@ -1140,7 +1142,9 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 			removeMyselfAsDepFromUsedSignals(this);
 			// 2. Call `compValue`
 			const prevEvalContext = evalContext;
+			const prevEvalContextWeak = evalContextWeak;
 			evalContext = ownerSig as SigComp<unknown>;
+			evalContextWeak = undefined;
 			try
 			{	if (!noCancelComp && this.promiseOrError instanceof Promise)
 				{	this.cancelComp?.(this.promiseOrError);
@@ -1153,6 +1157,7 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 			{	newValue = e instanceof Error ? e : new Error(e+'');
 			}
 			evalContext = prevEvalContext;
+			evalContextWeak = prevEvalContextWeak;
 			// 3. Add onChangeCallbacks to pending (if changed)
 			this.flagsAndOnchangeVersion = Flags.Value | (this.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 			return this.doSetValue(ownerSig, newValue, knownToBeChanged);
@@ -1175,11 +1180,14 @@ function sigSync<T>(that: SigComp<T>)
 {	const compSubj = that as Sig<unknown>;
 	if (compSubj !== evalContext)
 	{	const prevEvalContext = evalContext;
+		const prevEvalContextWeak = evalContextWeak;
 		evalContext = compSubj as SigComp<unknown>;
+		evalContextWeak = undefined;
 		that[_valueHolder].flagsAndOnchangeVersion = Flags.RecompInProgress | (that[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 		queueMicrotask
 		(	() =>
 			{	evalContext = prevEvalContext;
+				evalContextWeak = prevEvalContextWeak;
 				that[_valueHolder].flagsAndOnchangeVersion = Flags.Value | (that[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 			}
 		);
