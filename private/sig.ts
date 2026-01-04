@@ -385,8 +385,7 @@ export class Sig<T>
 		In promise state, returns the last value or default.
 	 **/
 	get value(): T
-	{	addMyselfAsDepToBeingComputed(this, CompType.Value);
-		return this[_valueHolder].get(this);
+	{	return this[_valueHolder].get(this);
 	}
 
 	/**	Sets a new value for the signal.
@@ -516,19 +515,11 @@ export class Sig<T>
 		If the value is already computed, or if the signal is in error state, returns `undefined`.
 	 **/
 	get promise(): Promise<T>|undefined
-	{	addMyselfAsDepToBeingComputed(this, CompType.Promise);
-		if (this[_valueHolder] instanceof ValueHolderComp)
-		{	this[_valueHolder].recomp(this as Any);
-		}
-		return this[_valueHolder].getPromise();
+	{	return this[_valueHolder].getPromise(this);
 	}
 
 	[_curError](): Error|undefined
-	{	addMyselfAsDepToBeingComputed(this, CompType.Error);
-		if (this[_valueHolder] instanceof ValueHolderComp)
-		{	this[_valueHolder].recomp(this as Any);
-		}
-		return this[_valueHolder].getError();
+	{	return this[_valueHolder].getErrorValue(this);
 	}
 
 	/**	Returns a signal that is `true` when this signal is in promise state, `false` otherwise.
@@ -833,22 +824,25 @@ class ValueHolder<T>
 		public id = idEnum++,
 	){}
 
-	get(_ownerSig: Sig<T>)
-	{	return this.value;
+	get(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Value);
+		return this.value;
 	}
 
 	/**	Returns the active promise if this signal is in promise state.
 		For non-promise signals, always returns undefined.
 	 **/
-	getPromise(): Promise<T>|undefined
-	{	return undefined;
+	getPromise(ownerSig: Sig<T>): Promise<T>|undefined
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
+		return undefined;
 	}
 
 	/**	Returns the Error object if this signal is in error state.
 		For non-error signals, always returns undefined.
 	 **/
-	getError(): Error|undefined
-	{	return undefined;
+	getErrorValue(ownerSig: Sig<T>): Error|undefined
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
+		return undefined;
 	}
 
 	/**	Sets a new value for the signal, potentially converting the ValueHolder type.
@@ -928,15 +922,17 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 	/**	Returns the active promise if this signal is in promise state.
 		Used by Sig.promise getter to access the promise without triggering recomputation.
 	 **/
-	override getPromise()
-	{	return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
+	override getPromise(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
+		return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
 	}
 
 	/**	Returns the Error object if this signal is in error state.
 		Used by Sig[_curError] method to access the error without triggering recomputation.
 	 **/
-	override getError()
-	{	return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
+	override getErrorValue(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
+		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
 	}
 
 	override set(ownerSig: Sig<T>, compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>): CompType
@@ -1080,7 +1076,8 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		This ensures computed signals are always up-to-date when accessed.
 	 **/
 	override get(ownerSig: Sig<T>)
-	{	this.recomp(ownerSig as SigComp<T>);
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Value);
+		this.recomp(ownerSig as SigComp<T>);
 		return this.value;
 	}
 
@@ -1118,6 +1115,24 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.dependOnMe, this.onChangeCallbacks, this.id, this.promiseOrError);
 		ownerSig[_valueHolder] = newValueHolder;
 		return newValueHolder.doSetValue(ownerSig, compValue);
+	}
+
+	/**	Returns the active promise if this signal is in promise state.
+		Used by Sig.promise getter to access the promise without triggering recomputation.
+	 **/
+	override getPromise(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
+		this.recomp(ownerSig as Any);
+		return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
+	}
+
+	/**	Returns the Error object if this signal is in error state.
+		Used by Sig[_curError] method to access the error without triggering recomputation.
+	 **/
+	override getErrorValue(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
+		this.recomp(ownerSig as Any);
+		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
 	}
 
 	/**	Recomputes a signal's value if it needs recomputation.
