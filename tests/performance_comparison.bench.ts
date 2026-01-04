@@ -949,3 +949,38 @@ Deno.bench
 		},
 	}
 );
+
+// =============================================================================
+// Benchmark 18: Signal Dependencies (Fan-out)
+// =============================================================================
+
+Deno.bench
+(	{	name: 'Local - Signal Dependencies (Fan-out)',
+		group: 'signal-dependencies',
+		baseline: true,
+		fn()
+		{	const source = sig(0);
+			const dependents = Array.from({length: 10}, () => sig(() => source.value * 2));
+
+			for (let i = 0; i < 10; i++)
+			{	source.value = i;
+				dependents.forEach(d => d.value);
+			}
+		},
+	}
+);
+
+Deno.bench
+(	{	name: 'Preact - Signal Dependencies (Fan-out)',
+		group: 'signal-dependencies',
+		fn()
+		{	const source = signal(0);
+			const dependents = Array.from({length: 10}, () => computed(() => source.value * 2));
+
+			for (let i = 0; i < 10; i++)
+			{	source.value = i;
+				dependents.forEach(d => d.value);
+			}
+		},
+	}
+);
