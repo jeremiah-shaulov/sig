@@ -510,11 +510,15 @@ export class Sig<T>
 		) as Any;
 	}
 
-	/**	Returns the active Promise when the signal is in promise state, otherwise `undefined`.
-		If the value is already computed, or if the signal is in error state, returns `undefined`.
+	/**	Returns a signal containing the Error object when in error state, otherwise `undefined`.
+		This signal itself is never in promise state.
 	 **/
-	get promise(): Promise<T>|undefined
-	{	return this[_valueHolder].getPromise(this);
+	get error(): Sig<Error|undefined>
+	{	if (!this.#errorSig)
+		{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, idEnum++, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
+			this.#errorSig = new Sig(valueHolder);
+		}
+		return this.#errorSig;
 	}
 
 	/**	Returns a signal that is `true` when this signal is in promise state, `false` otherwise.
@@ -528,15 +532,11 @@ export class Sig<T>
 		return this.#busySig;
 	}
 
-	/**	Returns a signal containing the Error object when in error state, otherwise `undefined`.
-		This signal itself is never in promise state.
+	/**	Returns the active Promise when the signal is in promise state, otherwise `undefined`.
+		If the value is already computed, or if the signal is in error state, returns `undefined`.
 	 **/
-	get error(): Sig<Error|undefined>
-	{	if (!this.#errorSig)
-		{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, idEnum++, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
-			this.#errorSig = new Sig(valueHolder);
-		}
-		return this.#errorSig;
+	get promise(): Promise<T>|undefined
+	{	return this[_valueHolder].getPromise(this);
 	}
 
 	/**	Returns the default value of the signal, as provided when the signal was created.
@@ -824,19 +824,19 @@ class ValueHolder<T>
 		return this.value;
 	}
 
-	/**	Returns the active promise if this signal is in promise state.
-		For non-promise signals, always returns undefined.
-	 **/
-	getPromise(ownerSig: Sig<T>): Promise<T>|undefined
-	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
-		return undefined;
-	}
-
 	/**	Returns the Error object if this signal is in error state.
 		For non-error signals, always returns undefined.
 	 **/
 	getErrorValue(ownerSig: Sig<T>): Error|undefined
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
+		return undefined;
+	}
+
+	/**	Returns the active promise if this signal is in promise state.
+		For non-promise signals, always returns undefined.
+	 **/
+	getPromise(ownerSig: Sig<T>): Promise<T>|undefined
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
 		return undefined;
 	}
 
@@ -914,19 +914,19 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		this.promiseOrError = promiseOrError instanceof Promise ? convPromise(promiseOrError) : promiseOrError;
 	}
 
+	/**	Returns the Error object if this signal is in error state.
+	 **/
+	override getErrorValue(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
+		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
+	}
+
 	/**	Returns the active promise if this signal is in promise state.
 		Used by Sig.promise getter to access the promise without triggering recomputation.
 	 **/
 	override getPromise(ownerSig: Sig<T>)
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
 		return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
-	}
-
-	/**	Returns the Error object if this signal is in error state.
-	 **/
-	override getErrorValue(ownerSig: Sig<T>)
-	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
-		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
 	}
 
 	override set(ownerSig: Sig<T>, compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>): CompType
@@ -1111,6 +1111,14 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		return newValueHolder.doSetValue(ownerSig, compValue);
 	}
 
+	/**	Returns the Error object if this signal is in error state.
+	 **/
+	override getErrorValue(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
+		this.recomp(ownerSig as Any);
+		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
+	}
+
 	/**	Returns the active promise if this signal is in promise state.
 		Used by Sig.promise getter to access the promise without triggering recomputation.
 	 **/
@@ -1118,14 +1126,6 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
 		this.recomp(ownerSig as Any);
 		return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
-	}
-
-	/**	Returns the Error object if this signal is in error state.
-	 **/
-	override getErrorValue(ownerSig: Sig<T>)
-	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
-		this.recomp(ownerSig as Any);
-		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
 	}
 
 	/**	Recomputes a signal's value if it needs recomputation.
