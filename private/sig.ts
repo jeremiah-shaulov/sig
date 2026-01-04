@@ -3,7 +3,6 @@ import type {ThisSig} from './this_sig.ts';
 
 const _propOfSignal = Symbol();
 const _valueHolder = Symbol();
-const _curError = Symbol();
 
 /**	Flags indicating which aspects of a signal's state were observed during computation.
 	Used as a bitmask to track what type of changes should trigger recomputation.
@@ -518,10 +517,6 @@ export class Sig<T>
 	{	return this[_valueHolder].getPromise(this);
 	}
 
-	[_curError](): Error|undefined
-	{	return this[_valueHolder].getErrorValue(this);
-	}
-
 	/**	Returns a signal that is `true` when this signal is in promise state, `false` otherwise.
 		Useful for reactively tracking async computation state.
 	 **/
@@ -538,7 +533,7 @@ export class Sig<T>
 	 **/
 	get error(): Sig<Error|undefined>
 	{	if (!this.#errorSig)
-		{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, idEnum++, undefined, undefined, () => this[_curError]());
+		{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, idEnum++, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
 			this.#errorSig = new Sig(valueHolder);
 		}
 		return this.#errorSig;
@@ -928,7 +923,6 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 	}
 
 	/**	Returns the Error object if this signal is in error state.
-		Used by Sig[_curError] method to access the error without triggering recomputation.
 	 **/
 	override getErrorValue(ownerSig: Sig<T>)
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
@@ -1127,7 +1121,6 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 	}
 
 	/**	Returns the Error object if this signal is in error state.
-		Used by Sig[_curError] method to access the error without triggering recomputation.
 	 **/
 	override getErrorValue(ownerSig: Sig<T>)
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
@@ -1273,7 +1266,7 @@ function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
 	@returns The unwrapped value or error
  **/
 function convNonPromise<T>(result: Value<T>)
-{	return result instanceof Sig ? result.promise ?? result[_curError]() ?? result.value : result;
+{	return result instanceof Sig ? result.promise ?? result[_valueHolder].getErrorValue(result) ?? result.value : result;
 }
 
 /**	Unwraps nested signals and converts errors to rejected promises.
