@@ -241,16 +241,22 @@
 	mySig.value = 42; // Updates value
 	```
 
-	Alternatively, use `mySig.set(newValueOrFn, cancelComp)` method, that does the same, but also accepts an optional cancellation function as the second argument:
+	Alternatively, use `mySig.set(newValue)` method, that also sets the signal's value:
 
 	```ts
 	const mySig = sig(10);
-	mySig..set(42); // Updates value
+	mySig.value = 42; // Updates value
+	mySig.set(43); // Updates value
 	```
 
 	### Converting Between Signal Types
 
-	Signals can be converted between value-holding and computed modes by assignment:
+	For signals of type `T`, their `value` property returns type `T`, and you can assign values of type `T` to it.
+	In the other hand, the `set()` method allows to set either a value of type `T`, a `Promise<T>` to switch the signal into busy state,
+	an `Error` object to switch the signal into error state, or a computation function that returns type `T`, `Promise<T>`, `Sig<T>` or an `Error`.
+
+	`set()` also has second argument (`mySig.set(newValueOrFn, cancelComp)`) to provide a cancellation function,
+	that will be called to abort the previous async computation if a new one starts before it completes.
 
 	```ts
 	const sigA = sig(10);
@@ -259,10 +265,10 @@
 	console.log(sigA.value); // 10
 	console.log(sigB.value); // 20
 
-	sigB.value = () => sigA.value * 3; // Convert to computed signal
+	sigB.set(() => sigA.value * 3); // Convert to computed signal
 	console.log(sigB.value); // 30
 
-	sigB.value = 40; // Convert back to value signal
+	sigB.set(40); // Convert back to value signal
 	console.log(sigB.value); // 40
 	```
 
@@ -278,7 +284,8 @@
 	const mySig = sig(() => backingValue, undefined, newValue => {backingValue = newValue});
 
 	console.log(mySig.value); // 0
-	mySig.value = 42; // Calls setter, doesn't convert to value signal
+	mySig.value = 42; // Calls setter
+	mySig.set(43); // Also calls setter, doesn't convert to value signal
 	console.log(mySig.value); // 42
 	```
 
