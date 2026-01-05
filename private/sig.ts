@@ -880,13 +880,13 @@ class ValueHolder<T>
 		{	// Upgrade to ValueHolderPromise
 			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.dependOnMe, this.onChangeCallbacks, this.id, undefined, cancelComp);
 			ownerSig[_valueHolder] = newValueHolder;
-			return newValueHolder.set(ownerSig, convPromise(compValue));
+			return valueHolderPromiseUpdate(ownerSig, convPromise(compValue));
 		}
 		if (compValue instanceof Error)
 		{	// Upgrade to ValueHolderPromise with error
 			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.dependOnMe, this.onChangeCallbacks, this.id);
 			ownerSig[_valueHolder] = newValueHolder;
-			return newValueHolder.set(ownerSig, compValue);
+			return valueHolderPromiseUpdate(ownerSig, compValue);
 		}
 		return this.set(ownerSig, compValue);
 	}
@@ -936,81 +936,54 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		@param bySetter Whether this update came from a setter function (triggers setValue callback)
 		@returns Flags indicating what changed (value/promise/error)
 	**/
-	override set(ownerSig: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, bySetter=false): CompType
+	override set(ownerSig: Sig<T>, newValue: T, knownToBeChanged=false, bySetter=false): CompType
 	{	let changeType = CompType.None;
 		const prevError = this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
 		const prevValue = this.value;
-		if (newValue instanceof Promise)
-		{	if (prevError)
-			{	changeType = CompType.Error|CompType.Promise; // error -> promise
+		let newError: Error|undefined;
+		if (bySetter && this instanceof ValueHolderComp && this.setValue)
+		{	// Try to apply the setter function, catching any errors it throws
+			batchLevel++;
+			try
+			{	this.setValue(newValue);
+				// Setter succeeded, now recompute to get the new value
+				this.flagsAndOnchangeVersion = Flags.WantRecomp | (this.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
+				return recomp(ownerSig as SigComp<T>);
 			}
-			else if (!this.promiseOrError)
-			{	changeType = CompType.Value|CompType.Promise; // value -> promise
+			catch (e)
+			{	// Setter threw an error, treat as error state
+				newError = e instanceof Error ? e : new Error(e+'');
 			}
-			const promise = newValue;
-			this.promiseOrError = promise;
-			// Set up handlers to update signal when promise resolves or rejects
-			promise.then
-			(	v =>
-				{	const valueHolder = ownerSig[_valueHolder]; // the value holder could have changed since the promise was set
-					if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError===promise) // ignore result of old promise if `promiseOrError` was set to a new promise
-					{	valueHolder.set(ownerSig, v, knownToBeChanged, bySetter) && flushPendingOnChange();
-					}
-				},
-				e =>
-				{	const valueHolder = ownerSig[_valueHolder]; // the value holder could have changed since the promise was set
-					if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError===promise) // ignore result of old promise if `promiseOrError` was set to a new promise
-					{	valueHolder.set(ownerSig, e instanceof Error ? e : new Error(e+''), knownToBeChanged, bySetter) && flushPendingOnChange();
-					}
-				}
-			);
+			finally
+			{	batchLevel--;
+			}
+		}
+		if (newError)
+		{	if (this.promiseOrError instanceof Promise)
+			{	changeType = CompType.Promise|CompType.Error; // promise -> error
+			}
+			else if (!prevError)
+			{	changeType = CompType.Value|CompType.Error; // value -> error
+			}
+			else if (newError.constructor!==prevError.constructor || newError.message!==prevError.message)
+			{	changeType = CompType.Error; // error -> error
+			}
 		}
 		else
-		{	let newError = !(this.flagsAndOnchangeVersion & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
-			if (bySetter && !newError && this instanceof ValueHolderComp && this.setValue)
-			{	// Try to apply the setter function, catching any errors it throws
-				batchLevel++;
-				try
-				{	this.setValue(newValue);
-					// Setter succeeded, now recompute to get the new value
-					this.flagsAndOnchangeVersion = Flags.WantRecomp | (this.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
-					return recomp(ownerSig as SigComp<T>);
-				}
-				catch (e)
-				{	// Setter threw an error, treat as error state
-					newError = e instanceof Error ? e : new Error(e+'');
-				}
-				finally
-				{	batchLevel--;
-				}
+		{	// Transitioning out of error or promise state, or value changed
+			if (this.promiseOrError instanceof Promise)
+			{	changeType = CompType.Promise|CompType.Value; // promise -> value
 			}
-			if (newError)
-			{	if (this.promiseOrError instanceof Promise)
-				{	changeType = CompType.Promise|CompType.Error; // promise -> error
-				}
-				else if (!prevError)
-				{	changeType = CompType.Value|CompType.Error; // value -> error
-				}
-				else if (newError.constructor!==prevError.constructor || newError.message!==prevError.message)
-				{	changeType = CompType.Error; // error -> error
-				}
+			else if (prevError)
+			{	changeType = CompType.Error|CompType.Value; // error -> value
 			}
-			else
-			{	// Transitioning out of error or promise state, or value changed
-				if (this.promiseOrError instanceof Promise)
-				{	changeType = CompType.Promise|CompType.Value; // promise -> value
-				}
-				else if (prevError)
-				{	changeType = CompType.Error|CompType.Value; // error -> value
-				}
-				else if (knownToBeChanged || !deepEquals(newValue, prevValue))
-				{	changeType = CompType.Value; // value -> value
-				}
+			else if (knownToBeChanged || !deepEquals(newValue, prevValue))
+			{	changeType = CompType.Value; // value -> value
 			}
-			// Update the signal's value and state
-			this.value = newError ? this.defaultValue : newValue as T;
-			this.promiseOrError = newError;
 		}
+		// Update the signal's value and state
+		this.value = newError ? this.defaultValue : newValue;
+		this.promiseOrError = newError;
 		if (changeType)
 		{	invokeOnChangeCallbacks(ownerSig, changeType, prevError ?? prevValue);
 		}
@@ -1030,10 +1003,10 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		}
 		if (compValue instanceof Promise)
 		{	this.cancelComp = cancelComp;
-			return this.set(ownerSig, convPromise(compValue));
+			return valueHolderPromiseUpdate(ownerSig, convPromise(compValue));
 		}
 		this.cancelComp = undefined;
-		return this.set(ownerSig, compValue);
+		return valueHolderPromiseUpdate(ownerSig, compValue);
 	}
 }
 
@@ -1085,7 +1058,7 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		{	if (typeof(compValue)=='function' || compValue instanceof Sig)
 			{	throw new Error('Cannot override computation function for signals with value setters');
 			}
-			return this.set(ownerSig, compValue instanceof Promise ? convPromise(compValue) : compValue, false, true);
+			return valueHolderPromiseUpdate(ownerSig, compValue instanceof Promise ? convPromise(compValue) : compValue, false, true);
 		}
 		// Cancel the current computation with the OLD cancelComp before replacing it
 		if (this.promiseOrError instanceof Promise)
@@ -1101,12 +1074,12 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		{	// Downgrade to ValueHolderPromise
 			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.dependOnMe, this.onChangeCallbacks, this.id, this.promiseOrError, cancelComp);
 			ownerSig[_valueHolder] = newValueHolder;
-			return newValueHolder.set(ownerSig, convPromise(compValue));
+			return valueHolderPromiseUpdate(ownerSig, convPromise(compValue));
 		}
 		// Downgrade to ValueHolderPromise
 		const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.dependOnMe, this.onChangeCallbacks, this.id, this.promiseOrError);
 		ownerSig[_valueHolder] = newValueHolder;
-		return newValueHolder.set(ownerSig, compValue);
+		return valueHolderPromiseUpdate(ownerSig, compValue);
 	}
 
 	/**	Returns the Error object if this signal is in error state.
@@ -1129,6 +1102,88 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 
 class ValueHolderConv<T> extends ValueHolderComp<T>
 {
+}
+
+function valueHolderPromiseUpdate<T>(ownerSig: Sig<T>, newValue: T|Promise<T>|Error, knownToBeChanged=false, bySetter=false): CompType
+{	const vh = ownerSig[_valueHolder] as ValueHolderPromise<T>;
+	let changeType = CompType.None;
+	const prevError = vh.promiseOrError instanceof Error ? vh.promiseOrError : undefined;
+	const prevValue = vh.value;
+	if (newValue instanceof Promise)
+	{	if (prevError)
+		{	changeType = CompType.Error|CompType.Promise; // error -> promise
+		}
+		else if (!vh.promiseOrError)
+		{	changeType = CompType.Value|CompType.Promise; // value -> promise
+		}
+		const promise = newValue;
+		vh.promiseOrError = promise;
+		// Set up handlers to update signal when promise resolves or rejects
+		promise.then
+		(	v =>
+			{	const valueHolder = ownerSig[_valueHolder]; // the value holder could have changed since the promise was set
+				if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError===promise) // ignore result of old promise if `promiseOrError` was set to a new promise
+				{	valueHolder.set(ownerSig, v, knownToBeChanged, bySetter) && flushPendingOnChange();
+				}
+			},
+			e =>
+			{	const valueHolder = ownerSig[_valueHolder]; // the value holder could have changed since the promise was set
+				if (valueHolder instanceof ValueHolderPromise && valueHolder.promiseOrError===promise) // ignore result of old promise if `promiseOrError` was set to a new promise
+				{	valueHolderPromiseUpdate(ownerSig, e instanceof Error ? e : new Error(e+''), knownToBeChanged, bySetter) && flushPendingOnChange();
+				}
+			}
+		);
+	}
+	else
+	{	let newError = !(vh.flagsAndOnchangeVersion & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
+		if (bySetter && !newError && vh instanceof ValueHolderComp && vh.setValue)
+		{	// Try to apply the setter function, catching any errors it throws
+			batchLevel++;
+			try
+			{	vh.setValue(newValue);
+				// Setter succeeded, now recompute to get the new value
+				vh.flagsAndOnchangeVersion = Flags.WantRecomp | (vh.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
+				return recomp(ownerSig as SigComp<T>);
+			}
+			catch (e)
+			{	// Setter threw an error, treat as error state
+				newError = e instanceof Error ? e : new Error(e+'');
+			}
+			finally
+			{	batchLevel--;
+			}
+		}
+		if (newError)
+		{	if (vh.promiseOrError instanceof Promise)
+			{	changeType = CompType.Promise|CompType.Error; // promise -> error
+			}
+			else if (!prevError)
+			{	changeType = CompType.Value|CompType.Error; // value -> error
+			}
+			else if (newError.constructor!==prevError.constructor || newError.message!==prevError.message)
+			{	changeType = CompType.Error; // error -> error
+			}
+		}
+		else
+		{	// Transitioning out of error or promise state, or value changed
+			if (vh.promiseOrError instanceof Promise)
+			{	changeType = CompType.Promise|CompType.Value; // promise -> value
+			}
+			else if (prevError)
+			{	changeType = CompType.Error|CompType.Value; // error -> value
+			}
+			else if (knownToBeChanged || !deepEquals(newValue, prevValue))
+			{	changeType = CompType.Value; // value -> value
+			}
+		}
+		// Update the signal's value and state
+		vh.value = newError ? vh.defaultValue : newValue as T;
+		vh.promiseOrError = newError;
+	}
+	if (changeType)
+	{	invokeOnChangeCallbacks(ownerSig, changeType, prevError ?? prevValue);
+	}
+	return changeType;
 }
 
 /**	Recomputes a signal's value if it needs recomputation.
@@ -1177,7 +1232,7 @@ function recomp<T>(ownerSig: SigComp<T>, knownToBeChanged=false, cause?: Sig<unk
 		evalContextIDependOnLen = prevEvalContextIDependOnLen;
 		// 2. Add onChangeCallbacks to pending (if changed)
 		valueHolder.flagsAndOnchangeVersion = Flags.Value | (valueHolder.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
-		return valueHolder.set(ownerSig, newValue, knownToBeChanged);
+		return valueHolderPromiseUpdate(ownerSig, newValue, knownToBeChanged);
 	}
 	return CompType.None;
 }
