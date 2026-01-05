@@ -13,10 +13,10 @@ Used for signals created with promises or that can transition to promise/error s
 [promiseOrError](#-promiseorerror-promiset--error--undefined),
 [cancelComp](#-cancelcomp-cancelcompt)
 - 4 methods:
-[getPromise](#-override-getpromise-promiset),
-[getError](#-override-geterror-error),
-[set](#-override-setownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype),
-[doSetValue](#-override-dosetvalueownersig-sigt-newvalue-t--promiset--error-knowntobechanged-booleanfalse-bysetter-booleanfalse-comptype)
+[getErrorValue](#-override-geterrorvalueownersig-sigt-error),
+[getPromise](#-override-getpromiseownersig-sigt-promiset),
+[set](#-override-setownersig-sigt-newvalue-t-knowntobechanged-booleanfalse-bysetter-booleanfalse-comptype),
+[adopt](#-override-adoptownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype)
 - 7 inherited members from [ValueHolder](../private.class.ValueHolder/README.md)
 
 
@@ -32,34 +32,22 @@ Used for signals created with promises or that can transition to promise/error s
 
 
 
-#### ⚙ `override` getPromise(): Promise\<T>
+#### ⚙ `override` getErrorValue(ownerSig: [Sig](../class.Sig/README.md)\<T>): Error
+
+> Returns the Error object if this signal is in error state.
+
+
+
+#### ⚙ `override` getPromise(ownerSig: [Sig](../class.Sig/README.md)\<T>): Promise\<T>
 
 > Returns the active promise if this signal is in promise state.
 > Used by Sig.promise getter to access the promise without triggering recomputation.
 
 
 
-#### ⚙ `override` getError(): Error
+#### ⚙ `override` set(ownerSig: [Sig](../class.Sig/README.md)\<T>, newValue: T, knownToBeChanged: `boolean`=false, bySetter: `boolean`=false): [CompType](../private.enum.CompType/README.md)
 
-> Returns the Error object if this signal is in error state.
-> Used by Sig[_curError] method to access the error without triggering recomputation.
-
-
-
-#### ⚙ `override` set(ownerSig: [Sig](../class.Sig/README.md)\<T>, compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): [CompType](../private.enum.CompType/README.md)
-
-> Sets a new value for the signal, potentially converting the ValueHolder type.
-> Converts to ValueHolderComp for functions/signals, ValueHolderPromise for promises/errors.
-
-
-
-#### ⚙ `override` doSetValue(ownerSig: [Sig](../class.Sig/README.md)\<T>, newValue: T | Promise\<T> | Error, knownToBeChanged: `boolean`=false, bySetter: `boolean`=false): [CompType](../private.enum.CompType/README.md)
-
-> Updates a signal's value and manages state transitions.
-> Handles transitions between value/promise/error states.
-> Performs deep equality checks to determine if change notifications are needed.
-> Schedules onChange callbacks and dependent signal recomputations.
-> For promises, sets up resolution handlers to update the signal when resolved/rejected.
+> Sets a new value for the signal.
 > 
 > 🎚️ Parameter **ownerSig**:
 > 
@@ -80,6 +68,13 @@ Used for signals created with promises or that can transition to promise/error s
 > ✔️ Return value:
 > 
 > Flags indicating what changed (value/promise/error)
+
+
+
+#### ⚙ `override` adopt(ownerSig: [Sig](../class.Sig/README.md)\<T>, compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): [CompType](../private.enum.CompType/README.md)
+
+> Sets a new value for the signal, potentially converting the ValueHolder type.
+> Converts to ValueHolderComp for functions/signals, ValueHolderPromise for promises/errors.
 
 
 

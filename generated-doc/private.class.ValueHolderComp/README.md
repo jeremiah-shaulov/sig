@@ -8,30 +8,31 @@ Automatically recomputes when dependencies change or when accessed if stale.
 
 ## This class has
 
-- [constructor](#-constructorflagsandonchangeversion-flags-prevvalue-t-defaultvalue-t-dependonme-dependonme--undefined-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown--undefined-id-number-prevpromiseorerror-promiset--error--undefined-cancelcomp-cancelcompt--undefined-compvalue-sigt--compvaluet-idependon-sigany-setvalue-setvaluet)
+- [constructor](#-constructorflagsandonchangeversion-flags-prevvalue-t-defaultvalue-t-dependonme-dependonme--undefined-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown--undefined-id-number-prevpromiseorerror-promiset--error--undefined-cancelcomp-cancelcompt--undefined-compvalue-sigt--compvaluet-setvalue-setvaluet)
 - 3 properties:
-[compValue](#-compvalue-sigt--compvaluet),
 [iDependOn](#-idependon-sigany),
+[compValue](#-compvalue-sigt--compvaluet),
 [setValue](#-setvalue-setvaluet)
-- 3 methods:
+- 4 methods:
 [get](#-override-getownersig-sigt-t),
-[set](#-override-setownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype),
-[recomp](#-recompownersig-sigcompt-knowntobechanged-booleanfalse-cause-sigunknown-nocancelcomp-booleanfalse-comptype)
-- 5 inherited members from [ValueHolderPromise](../private.class.ValueHolderPromise/README.md), 6 from [ValueHolder](../private.class.ValueHolder/README.md)
+[adopt](#-override-adoptownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype),
+[getErrorValue](#-override-geterrorvalueownersig-sigt-error),
+[getPromise](#-override-getpromiseownersig-sigt-promiset)
+- 3 inherited members from [ValueHolderPromise](../private.class.ValueHolderPromise/README.md), 6 from [ValueHolder](../private.class.ValueHolder/README.md)
 
 
-#### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), prevValue: T, defaultValue: T, dependOnMe: [DependOnMe](../private.type.DependOnMe/README.md) | `undefined`, onChangeCallbacks: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>> | `undefined`, id: `number`, prevPromiseOrError: Promise\<T> | Error | `undefined`, cancelComp: [CancelComp](../private.type.CancelComp/README.md)\<T> | `undefined`, compValue: [Sig](../class.Sig/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, iDependOn?: [Sig](../class.Sig/README.md)\<[Any](../private.type.Any/README.md)>\[], setValue?: [SetValue](../private.type.SetValue/README.md)\<T>)
+#### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), prevValue: T, defaultValue: T, dependOnMe: [DependOnMe](../private.type.DependOnMe/README.md) | `undefined`, onChangeCallbacks: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>> | `undefined`, id: `number`, prevPromiseOrError: Promise\<T> | Error | `undefined`, cancelComp: [CancelComp](../private.type.CancelComp/README.md)\<T> | `undefined`, compValue: [Sig](../class.Sig/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, setValue?: [SetValue](../private.type.SetValue/README.md)\<T>)
+
+
+
+#### 📄 iDependOn: [Sig](../class.Sig/README.md)\<`any`>\[]
+
+> Signals that this signal depends on, along with what aspects (value/promise/error) were observed.
+> When a dependency changes, we check if the observed aspect changed to determine if recomputation is needed.
 
 
 
 #### 📄 compValue: [Sig](../class.Sig/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>
-
-
-
-#### 📄 iDependOn?: [Sig](../class.Sig/README.md)\<[Any](../private.type.Any/README.md)>\[]
-
-> Signals that this signal depends on, along with what aspects (value/promise/error) were observed.
-> When a dependency changes, we check if the observed aspect changed to determine if recomputation is needed.
 
 
 
@@ -46,7 +47,7 @@ Automatically recomputes when dependencies change or when accessed if stale.
 
 
 
-#### ⚙ `override` set(ownerSig: [Sig](../class.Sig/README.md)\<T>, compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): [CompType](../private.enum.CompType/README.md)
+#### ⚙ `override` adopt(ownerSig: [Sig](../class.Sig/README.md)\<T>, compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): [CompType](../private.enum.CompType/README.md)
 
 > Sets a new value or computation for a computed signal.
 > If this signal has a setValue callback, invokes it and triggers recomputation.
@@ -70,35 +71,16 @@ Automatically recomputes when dependencies change or when accessed if stale.
 
 
 
-#### ⚙ recomp(ownerSig: [SigComp](../private.type.SigComp/README.md)\<T>, knownToBeChanged: `boolean`=false, cause?: [Sig](../class.Sig/README.md)\<`unknown`>, noCancelComp: `boolean`=false): [CompType](../private.enum.CompType/README.md)
+#### ⚙ `override` getErrorValue(ownerSig: [Sig](../class.Sig/README.md)\<T>): Error
 
-> Recomputes a signal's value if it needs recomputation.
-> This is the core computation function that:
-> 1. Checks if recomputation is needed (WantRecomp flag)
-> 2. Removes old dependencies
-> 3. Executes the computation function with dependency tracking
-> 4. Establishes new dependencies
-> 5. Updates the value and triggers notifications
-> 
-> 🎚️ Parameter **ownerSig**:
-> 
-> Signal to recompute
-> 
-> 🎚️ Parameter **knownToBeChanged**:
-> 
-> Whether we know the value changed (skips equality check)
-> 
-> 🎚️ Parameter **cause**:
-> 
-> The signal that triggered this recomputation (for debugging)
-> 
-> 🎚️ Parameter **noCancelComp**:
-> 
-> Skip calling the cancel function for pending promises
-> 
-> ✔️ Return value:
-> 
-> Flags indicating what changed (value/promise/error)
+> Returns the Error object if this signal is in error state.
+
+
+
+#### ⚙ `override` getPromise(ownerSig: [Sig](../class.Sig/README.md)\<T>): Promise\<T>
+
+> Returns the active promise if this signal is in promise state.
+> Used by Sig.promise getter to access the promise without triggering recomputation.
 
 
 

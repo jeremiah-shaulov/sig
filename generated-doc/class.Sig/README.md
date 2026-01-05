@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.14"
+import {Sig} from "jsr:@shaulov/sig@0.0.15"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
@@ -191,9 +191,9 @@ For rejected Promises, no notification occurs.
 [value](#-accessor-value-t),
 [this](#-get-this-thissigt),
 [mut](#-get-mut-mutsigt),
-[promise](#-get-promise-promiset),
-[busy](#-get-busy-sigboolean),
 [error](#-get-error-sigerror),
+[busy](#-get-busy-sigboolean),
+[promise](#-get-promise-promiset),
 [default](#-get-default-t)
 - 9 methods:
 [set](#-setcompvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-void),
@@ -270,10 +270,10 @@ For rejected Promises, no notification occurs.
 
 
 
-#### 📄 `get` promise(): Promise\<T>
+#### 📄 `get` error(): [Sig](../class.Sig/README.md)\<Error>
 
-> Returns the active Promise when the signal is in promise state, otherwise `undefined`.
-> If the value is already computed, or if the signal is in error state, returns `undefined`.
+> Returns a signal containing the Error object when in error state, otherwise `undefined`.
+> This signal itself is never in promise state.
 
 
 
@@ -284,10 +284,10 @@ For rejected Promises, no notification occurs.
 
 
 
-#### 📄 `get` error(): [Sig](../class.Sig/README.md)\<Error>
+#### 📄 `get` promise(): Promise\<T>
 
-> Returns a signal containing the Error object when in error state, otherwise `undefined`.
-> This signal itself is never in promise state.
+> Returns the active Promise when the signal is in promise state, otherwise `undefined`.
+> If the value is already computed, or if the signal is in error state, returns `undefined`.
 
 
 

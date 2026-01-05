@@ -17,11 +17,11 @@ Subclasses extend this to handle promises and computed values.
 [onChangeCallbacks](#-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown),
 [id](#-id-number)
 - 5 methods:
-[get](#-get_ownersig-sigt-t),
-[getPromise](#-getpromise-promiset),
-[getError](#-geterror-error),
-[set](#-setownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype),
-[doSetValue](#-dosetvalueownersig-sigt-newvalue-t-knowntobechanged-booleanfalse-comptype)
+[get](#-getownersig-sigt-t),
+[getErrorValue](#-geterrorvalueownersig-sigt-error),
+[getPromise](#-getpromiseownersig-sigt-promiset),
+[set](#-setownersig-sigt-newvalue-t-knowntobechanged-booleanfalse-_bysetter-booleanfalse-comptype),
+[adopt](#-adoptownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype)
 
 
 #### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), value: T, defaultValue: T, dependOnMe?: [DependOnMe](../private.type.DependOnMe/README.md), onChangeCallbacks?: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>>, id: `number`=idEnum++)
@@ -59,25 +59,47 @@ Subclasses extend this to handle promises and computed values.
 
 
 
-#### ⚙ get(\_ownerSig: [Sig](../class.Sig/README.md)\<T>): T
+#### ⚙ get(ownerSig: [Sig](../class.Sig/README.md)\<T>): T
 
 
 
-#### ⚙ getPromise(): Promise\<T>
-
-> Returns the active promise if this signal is in promise state.
-> For non-promise signals, always returns undefined.
-
-
-
-#### ⚙ getError(): Error
+#### ⚙ getErrorValue(ownerSig: [Sig](../class.Sig/README.md)\<T>): Error
 
 > Returns the Error object if this signal is in error state.
 > For non-error signals, always returns undefined.
 
 
 
-#### ⚙ set(ownerSig: [Sig](../class.Sig/README.md)\<T>, compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): [CompType](../private.enum.CompType/README.md)
+#### ⚙ getPromise(ownerSig: [Sig](../class.Sig/README.md)\<T>): Promise\<T>
+
+> Returns the active promise if this signal is in promise state.
+> For non-promise signals, always returns undefined.
+
+
+
+#### ⚙ set(ownerSig: [Sig](../class.Sig/README.md)\<T>, newValue: T, knownToBeChanged: `boolean`=false, \_bySetter: `boolean`=false): [CompType](../private.enum.CompType/README.md)
+
+> Sets a new value for the signal.
+> 
+> 🎚️ Parameter **ownerSig**:
+> 
+> The signal being updated
+> 
+> 🎚️ Parameter **value**:
+> 
+> New value
+> 
+> 🎚️ Parameter **knownToBeChanged**:
+> 
+> Skip equality check if we know it changed
+> 
+> ✔️ Return value:
+> 
+> Flags indicating what changed (value/promise/error)
+
+
+
+#### ⚙ adopt(ownerSig: [Sig](../class.Sig/README.md)\<T>, compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): [CompType](../private.enum.CompType/README.md)
 
 > Sets a new value for the signal, potentially converting the ValueHolder type.
 > Converts to ValueHolderComp for functions/signals, ValueHolderPromise for promises/errors.
@@ -93,35 +115,6 @@ Subclasses extend this to handle promises and computed values.
 > 🎚️ Parameter **cancelComp**:
 > 
 > Optional cancellation callback for async computations
-> 
-> ✔️ Return value:
-> 
-> Flags indicating what changed (value/promise/error)
-
-
-
-#### ⚙ doSetValue(ownerSig: [Sig](../class.Sig/README.md)\<T>, newValue: T, knownToBeChanged: `boolean`=false): [CompType](../private.enum.CompType/README.md)
-
-> Updates a signal's value and manages state transitions.
-> Handles transitions between value/promise/error states.
-> Performs deep equality checks to determine if change notifications are needed.
-> Schedules onChange callbacks and dependent signal recomputations.
-> 
-> 🎚️ Parameter **ownerSig**:
-> 
-> Signal to update
-> 
-> 🎚️ Parameter **newValue**:
-> 
-> New value (not promise or error for base class)
-> 
-> 🎚️ Parameter **knownToBeChanged**:
-> 
-> Skip equality check if we know it changed
-> 
-> 🎚️ Parameter **bySetter**:
-> 
-> Whether this update came from a setter function
 > 
 > ✔️ Return value:
 > 
