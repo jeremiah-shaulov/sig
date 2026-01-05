@@ -62,6 +62,8 @@ const enum Flags
  **/
 let evalContext: SigComp<unknown> | undefined;
 let evalContextWeak: WeakRef<SigComp<unknown>> | undefined;
+let evalContextIDependOn: Sig<Any>[] | undefined;
+let evalContextIDependOnLen = 0;
 
 /**	Callbacks scheduled to be invoked when signals change.
 	These are batched and executed during the flush cycle to ensure consistent state.
@@ -750,13 +752,24 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 			evalContextWeak ??= new WeakRef(evalContext);
 			that[_valueHolder].dependOnMe ??= new Map;
 			that[_valueHolder].dependOnMe.set(evalContext[_valueHolder].id, {subj: evalContextWeak, compType});
-			if (!evalContext[_valueHolder].iDependOn.includes(that))
-			{	evalContext[_valueHolder].iDependOn.push(that);
-			}
 		}
 		else
 		{	// Existing dependency: update what aspects are observed
 			depRef.compType |= compType;
+		}
+		if (evalContextIDependOn![evalContextIDependOnLen] === that)
+		{	evalContextIDependOnLen++;
+		}
+		else
+		{	let i = 0;
+			for (; i<evalContextIDependOnLen; i++)
+			{	if (evalContextIDependOn![i] == that)
+				{	break;
+				}
+			}
+			if (i == evalContextIDependOnLen)
+			{	evalContextIDependOn![evalContextIDependOnLen++] = that;
+			}
 		}
 	}
 }
@@ -778,19 +791,6 @@ function checkCircular<T>(that: ValueHolderComp<T>, target: ValueHolderComp<Any>
 	}
 	visited.add(that);
 	return that.iDependOn.some(dep => dep[_valueHolder] instanceof ValueHolderComp && checkCircular(dep[_valueHolder], target, visited));
-}
-
-/**	Removes this signal from the dependent list of all signals it depends on.
-	Called before recomputation to clear old dependencies.
-	New dependencies will be established during the recomputation.
-
-	@param that The signal whose dependencies should be cleared
- **/
-function removeMyselfAsDepFromUsedSignals<T>(that: ValueHolderComp<T>)
-{	for (const usedSig of that.iDependOn)
-	{	usedSig[_valueHolder].dependOnMe?.delete(that.id);
-	}
-	that.iDependOn.length = 0;
 }
 
 type DependOnMe = Map<number, {subj: WeakRef<SigComp<unknown>>, compType: CompType}>;
@@ -1144,13 +1144,15 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 	{	if ((this.flagsAndOnchangeVersion & Flags.ValueStatusMask) == Flags.WantRecomp)
 		{	this.flagsAndOnchangeVersion = Flags.RecompInProgress | (this.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 			let newValue: T|Promise<T>|Error;
-			// 1. Remove myself as dependency from signals used in my computation function. Later `compValue` will readd myself to those signals for which computation triggers
-			removeMyselfAsDepFromUsedSignals(this);
-			// 2. Call `compValue`
+			// 1. Call `compValue`
 			const prevEvalContext = evalContext;
 			const prevEvalContextWeak = evalContextWeak;
+			const prevEvalContextIDependOn = evalContextIDependOn;
+			const prevEvalContextIDependOnLen = evalContextIDependOnLen;
 			evalContext = ownerSig as SigComp<unknown>;
 			evalContextWeak = undefined;
+			evalContextIDependOn = this.iDependOn;
+			evalContextIDependOnLen = 0;
 			try
 			{	if (!noCancelComp && this.promiseOrError instanceof Promise)
 				{	this.cancelComp?.(this.promiseOrError);
@@ -1162,9 +1164,12 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 			catch (e)
 			{	newValue = e instanceof Error ? e : new Error(e+'');
 			}
+			doneCollectingDeps(this);
 			evalContext = prevEvalContext;
 			evalContextWeak = prevEvalContextWeak;
-			// 3. Add onChangeCallbacks to pending (if changed)
+			evalContextIDependOn = prevEvalContextIDependOn;
+			evalContextIDependOnLen = prevEvalContextIDependOnLen;
+			// 2. Add onChangeCallbacks to pending (if changed)
 			this.flagsAndOnchangeVersion = Flags.Value | (this.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 			return this.set(ownerSig, newValue, knownToBeChanged);
 		}
@@ -1174,6 +1179,14 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 
 class ValueHolderConv<T> extends ValueHolderComp<T>
 {
+}
+
+function doneCollectingDeps(vh: ValueHolderComp<Any>)
+{	const {iDependOn} = vh;
+	for (let i=evalContextIDependOnLen; i<iDependOn.length; i++)
+	{	iDependOn[i][_valueHolder].dependOnMe?.delete(vh.id);
+	}
+	iDependOn.length = evalContextIDependOnLen;
 }
 
 /**	Resumes dependency tracking after an async await point.
@@ -1187,14 +1200,22 @@ function sigSync<T>(that: SigComp<T>)
 	if (compSubj !== evalContext)
 	{	const prevEvalContext = evalContext;
 		const prevEvalContextWeak = evalContextWeak;
+		const prevEvalContextIDependOn = evalContextIDependOn;
+		const prevEvalContextIDependOnLen = evalContextIDependOnLen;
+		const vh = that[_valueHolder];
 		evalContext = compSubj as SigComp<unknown>;
 		evalContextWeak = undefined;
-		that[_valueHolder].flagsAndOnchangeVersion = Flags.RecompInProgress | (that[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
+		evalContextIDependOn = vh.iDependOn;
+		evalContextIDependOnLen = 0;
+		vh.flagsAndOnchangeVersion = Flags.RecompInProgress | (vh.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 		queueMicrotask
 		(	() =>
-			{	evalContext = prevEvalContext;
+			{	doneCollectingDeps(vh);
+				evalContext = prevEvalContext;
 				evalContextWeak = prevEvalContextWeak;
-				that[_valueHolder].flagsAndOnchangeVersion = Flags.Value | (that[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
+				evalContextIDependOn = prevEvalContextIDependOn;
+				evalContextIDependOnLen = prevEvalContextIDependOnLen;
+				vh.flagsAndOnchangeVersion = Flags.Value | (vh.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 			}
 		);
 	}
