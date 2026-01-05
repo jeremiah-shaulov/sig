@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {sig} from "jsr:@shaulov/sig@0.0.15"
+import {sig} from "jsr:@shaulov/sig@0.0.16"
 ```
 
 `function` sig\<T>(compValue?: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, defaultValue?: T, setValue?: [SetValue](../private.type.SetValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): [Sig](../class.Sig/README.md)\<T>
