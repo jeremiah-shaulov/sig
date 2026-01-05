@@ -1224,7 +1224,7 @@ function recomp<T>(ownerSig: SigComp<T>, knownToBeChanged=false, cause?: Sig<unk
 			{	valueHolder.cancelComp?.(valueHolder.promiseOrError);
 			}
 			const {compValue} = valueHolder;
-			const result = compValue instanceof Sig ? compValue : compValue(() => sigSync(ownerSig), cause);
+			const result = compValue instanceof Sig ? compValue : compValue(sigSync.bind(ownerSig as Any), cause);
 			newValue = result instanceof Promise ? convPromise(result) : convNonPromise(result);
 		}
 		catch (e)
@@ -1255,14 +1255,14 @@ function doneCollectingDeps(vh: ValueHolderComp<Any>)
 
 	@param that The signal whose computation is being synchronized
  **/
-function sigSync<T>(that: SigComp<T>)
-{	const compSubj = that as Sig<unknown>;
+function sigSync<T>(this: SigComp<T>)
+{	const compSubj = this as Sig<unknown>;
 	if (compSubj !== evalContext)
 	{	const prevEvalContext = evalContext;
 		const prevEvalContextWeak = evalContextWeak;
 		const prevEvalContextIDependOn = evalContextIDependOn;
 		const prevEvalContextIDependOnLen = evalContextIDependOnLen;
-		const vh = that[_valueHolder];
+		const vh = this[_valueHolder];
 		evalContext = compSubj as SigComp<unknown>;
 		evalContextWeak = undefined;
 		evalContextIDependOn = vh.iDependOn;
