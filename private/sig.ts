@@ -163,7 +163,7 @@ function flushPendingOnChange()
 		while (true)
 		{	for (let i=0; i<pendingRecomp.length; i++)
 			{	const {subj, knownToBeChanged, cause} = pendingRecomp[i];
-				subj[_valueHolder].recomp(subj, knownToBeChanged, cause);
+				recomp(subj, knownToBeChanged, cause);
 			}
 			pendingRecomp.length = 0;
 			for (let i=0; i<pendingOnChange.length; i++)
@@ -696,7 +696,7 @@ export class Sig<T>
 		}
 		hasOnchangeVersion += Flags.OnChangeVersionStep;
 		if ((this[_valueHolder].flagsAndOnchangeVersion & Flags.ValueStatusMask) == Flags.WantRecomp)
-		{	(this[_valueHolder] as ValueHolderComp<T>).recomp(this as Any) && flushPendingOnChange(); // this is needed if computation never called for this signal, to record dependencies
+		{	recomp(this as Any) && flushPendingOnChange(); // this is needed if computation never called for this signal, to record dependencies
 		}
 	}
 
@@ -874,7 +874,7 @@ class ValueHolder<T>
 		{	// Upgrade to ValueHolderComp
 			const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, this.dependOnMe, this.onChangeCallbacks, this.id, undefined, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
 			ownerSig[_valueHolder] = newValueHolder;
-			return newValueHolder.recomp(ownerSig as SigComp<T>, false, undefined, true);
+			return recomp(ownerSig as SigComp<T>, false, undefined, true);
 		}
 		if (compValue instanceof Promise)
 		{	// Upgrade to ValueHolderPromise
@@ -974,7 +974,7 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 				{	this.setValue(newValue);
 					// Setter succeeded, now recompute to get the new value
 					this.flagsAndOnchangeVersion = Flags.WantRecomp | (this.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
-					return this.recomp(ownerSig as SigComp<T>);
+					return recomp(ownerSig as SigComp<T>);
 				}
 				catch (e)
 				{	// Setter threw an error, treat as error state
@@ -1026,7 +1026,7 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		{	// Upgrade to ValueHolderComp
 			const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, this.dependOnMe, this.onChangeCallbacks, this.id, this.promiseOrError, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
 			ownerSig[_valueHolder] = newValueHolder;
-			return newValueHolder.recomp(ownerSig as SigComp<T>, false, undefined, true);
+			return recomp(ownerSig as SigComp<T>, false, undefined, true);
 		}
 		if (compValue instanceof Promise)
 		{	this.cancelComp = cancelComp;
@@ -1067,7 +1067,7 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 	 **/
 	override get(ownerSig: Sig<T>)
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Value);
-		this.recomp(ownerSig as SigComp<T>);
+		recomp(ownerSig as SigComp<T>);
 		return this.value;
 	}
 
@@ -1095,7 +1095,7 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		{	this.compValue = compValue as Sig<T>|CompValue<T>;
 			this.cancelComp = compValue instanceof Sig ? undefined : cancelComp;
 			this.flagsAndOnchangeVersion = this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp;
-			return this.recomp(ownerSig as SigComp<T>, false, undefined, true);
+			return recomp(ownerSig as SigComp<T>, false, undefined, true);
 		}
 		if (compValue instanceof Promise)
 		{	// Downgrade to ValueHolderPromise
@@ -1113,7 +1113,7 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 	 **/
 	override getErrorValue(ownerSig: Sig<T>)
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
-		this.recomp(ownerSig as Any);
+		recomp(ownerSig as Any);
 		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
 	}
 
@@ -1122,63 +1122,64 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 	 **/
 	override getPromise(ownerSig: Sig<T>)
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
-		this.recomp(ownerSig as Any);
+		recomp(ownerSig as Any);
 		return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
-	}
-
-	/**	Recomputes a signal's value if it needs recomputation.
-		This is the core computation function that:
-		1. Checks if recomputation is needed (WantRecomp flag)
-		2. Removes old dependencies
-		3. Executes the computation function with dependency tracking
-		4. Establishes new dependencies
-		5. Updates the value and triggers notifications
-
-		@param ownerSig Signal to recompute
-		@param knownToBeChanged Whether we know the value changed (skips equality check)
-		@param cause The signal that triggered this recomputation (for debugging)
-		@param noCancelComp Skip calling the cancel function for pending promises
-		@returns Flags indicating what changed (value/promise/error)
-	**/
-	recomp(ownerSig: SigComp<T>, knownToBeChanged=false, cause?: Sig<unknown>, noCancelComp=false): CompType
-	{	if ((this.flagsAndOnchangeVersion & Flags.ValueStatusMask) == Flags.WantRecomp)
-		{	this.flagsAndOnchangeVersion = Flags.RecompInProgress | (this.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
-			let newValue: T|Promise<T>|Error;
-			// 1. Call `compValue`
-			const prevEvalContext = evalContext;
-			const prevEvalContextWeak = evalContextWeak;
-			const prevEvalContextIDependOn = evalContextIDependOn;
-			const prevEvalContextIDependOnLen = evalContextIDependOnLen;
-			evalContext = ownerSig as SigComp<unknown>;
-			evalContextWeak = undefined;
-			evalContextIDependOn = this.iDependOn;
-			evalContextIDependOnLen = 0;
-			try
-			{	if (!noCancelComp && this.promiseOrError instanceof Promise)
-				{	this.cancelComp?.(this.promiseOrError);
-				}
-				const {compValue} = this;
-				const result = compValue instanceof Sig ? compValue : compValue(() => sigSync(ownerSig), cause);
-				newValue = result instanceof Promise ? convPromise(result) : convNonPromise(result);
-			}
-			catch (e)
-			{	newValue = e instanceof Error ? e : new Error(e+'');
-			}
-			doneCollectingDeps(this);
-			evalContext = prevEvalContext;
-			evalContextWeak = prevEvalContextWeak;
-			evalContextIDependOn = prevEvalContextIDependOn;
-			evalContextIDependOnLen = prevEvalContextIDependOnLen;
-			// 2. Add onChangeCallbacks to pending (if changed)
-			this.flagsAndOnchangeVersion = Flags.Value | (this.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
-			return this.set(ownerSig, newValue, knownToBeChanged);
-		}
-		return CompType.None;
 	}
 }
 
 class ValueHolderConv<T> extends ValueHolderComp<T>
 {
+}
+
+/**	Recomputes a signal's value if it needs recomputation.
+	This is the core computation function that:
+	1. Checks if recomputation is needed (WantRecomp flag)
+	2. Removes old dependencies
+	3. Executes the computation function with dependency tracking
+	4. Establishes new dependencies
+	5. Updates the value and triggers notifications
+
+	@param ownerSig Signal to recompute
+	@param knownToBeChanged Whether we know the value changed (skips equality check)
+	@param cause The signal that triggered this recomputation (for debugging)
+	@param noCancelComp Skip calling the cancel function for pending promises
+	@returns Flags indicating what changed (value/promise/error)
+**/
+function recomp<T>(ownerSig: SigComp<T>, knownToBeChanged=false, cause?: Sig<unknown>, noCancelComp=false): CompType
+{	const valueHolder = ownerSig[_valueHolder];
+	if ((valueHolder.flagsAndOnchangeVersion & Flags.ValueStatusMask) == Flags.WantRecomp)
+	{	valueHolder.flagsAndOnchangeVersion = Flags.RecompInProgress | (valueHolder.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
+		let newValue: T|Promise<T>|Error;
+		// 1. Call `compValue`
+		const prevEvalContext = evalContext;
+		const prevEvalContextWeak = evalContextWeak;
+		const prevEvalContextIDependOn = evalContextIDependOn;
+		const prevEvalContextIDependOnLen = evalContextIDependOnLen;
+		evalContext = ownerSig as SigComp<unknown>;
+		evalContextWeak = undefined;
+		evalContextIDependOn = valueHolder.iDependOn;
+		evalContextIDependOnLen = 0;
+		try
+		{	if (!noCancelComp && valueHolder.promiseOrError instanceof Promise)
+			{	valueHolder.cancelComp?.(valueHolder.promiseOrError);
+			}
+			const {compValue} = valueHolder;
+			const result = compValue instanceof Sig ? compValue : compValue(() => sigSync(ownerSig), cause);
+			newValue = result instanceof Promise ? convPromise(result) : convNonPromise(result);
+		}
+		catch (e)
+		{	newValue = e instanceof Error ? e : new Error(e+'');
+		}
+		doneCollectingDeps(valueHolder);
+		evalContext = prevEvalContext;
+		evalContextWeak = prevEvalContextWeak;
+		evalContextIDependOn = prevEvalContextIDependOn;
+		evalContextIDependOnLen = prevEvalContextIDependOnLen;
+		// 2. Add onChangeCallbacks to pending (if changed)
+		valueHolder.flagsAndOnchangeVersion = Flags.Value | (valueHolder.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
+		return valueHolder.set(ownerSig, newValue, knownToBeChanged);
+	}
+	return CompType.None;
 }
 
 function doneCollectingDeps(vh: ValueHolderComp<Any>)
@@ -1369,7 +1370,7 @@ function sigConvert<T, R>(that: Sig<T>, compValue: (value: T) => ValueOrPromise<
 {	if (that[_valueHolder] instanceof ValueHolderPromise)
 	{	addMyselfAsDepToBeingComputed(that, CompType.Value|CompType.Promise|CompType.Error);
 		if (that[_valueHolder] instanceof ValueHolderComp)
-		{	that[_valueHolder].recomp(that as SigComp<T>) && flushPendingOnChange();
+		{	recomp(that as SigComp<T>) && flushPendingOnChange();
 		}
 		const {promiseOrError} = that[_valueHolder];
 		return promiseOrError instanceof Promise ? promiseOrError.then(compValue) : promiseOrError ?? compValue(that.value);
