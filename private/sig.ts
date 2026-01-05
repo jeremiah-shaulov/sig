@@ -757,18 +757,23 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 		{	// Existing dependency: update what aspects are observed
 			depRef.compType |= compType;
 		}
-		if (evalContextIDependOn![evalContextIDependOnLen] === that)
+		const atLen = evalContextIDependOn![evalContextIDependOnLen];
+		if (atLen === that)
 		{	evalContextIDependOnLen++;
 		}
 		else
-		{	let i = 0;
-			for (; i<evalContextIDependOnLen; i++)
-			{	if (evalContextIDependOn![i] == that)
-				{	break;
+		{	const i = evalContextIDependOn!.indexOf(that);
+			if (i == -1)
+			{	// New dependency not in array yet
+				evalContextIDependOn![evalContextIDependOnLen++] = that;
+				if (atLen !== undefined)
+				{	evalContextIDependOn![evalContextIDependOn!.length] = atLen;
 				}
 			}
-			if (i == evalContextIDependOnLen)
-			{	evalContextIDependOn![evalContextIDependOnLen++] = that;
+			else if (i > evalContextIDependOnLen)
+			{	// Dependency found later in array, swap it to current position
+				evalContextIDependOn![evalContextIDependOnLen++] = that;
+				evalContextIDependOn![i] = atLen;
 			}
 		}
 	}
@@ -1238,11 +1243,10 @@ function recomp<T>(ownerSig: SigComp<T>, knownToBeChanged=false, cause?: Sig<unk
 }
 
 function doneCollectingDeps(vh: ValueHolderComp<Any>)
-{	const {iDependOn} = vh;
-	for (let i=evalContextIDependOnLen; i<iDependOn.length; i++)
-	{	iDependOn[i][_valueHolder].dependOnMe?.delete(vh.id);
+{	for (let i=evalContextIDependOnLen; i<evalContextIDependOn!.length; i++)
+	{	evalContextIDependOn![i][_valueHolder].dependOnMe?.delete(vh.id);
 	}
-	iDependOn.length = evalContextIDependOnLen;
+	evalContextIDependOn!.length = evalContextIDependOnLen;
 }
 
 /**	Resumes dependency tracking after an async await point.
@@ -1262,11 +1266,11 @@ function sigSync<T>(that: SigComp<T>)
 		evalContext = compSubj as SigComp<unknown>;
 		evalContextWeak = undefined;
 		evalContextIDependOn = vh.iDependOn;
-		evalContextIDependOnLen = 0;
+		evalContextIDependOnLen = vh.iDependOn.length; // Continue from where we left off
 		vh.flagsAndOnchangeVersion = Flags.RecompInProgress | (vh.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 		queueMicrotask
 		(	() =>
-			{	doneCollectingDeps(vh);
+			{	// Don't call doneCollectingDeps here - let recomp handle it
 				evalContext = prevEvalContext;
 				evalContextWeak = prevEvalContextWeak;
 				evalContextIDependOn = prevEvalContextIDependOn;
