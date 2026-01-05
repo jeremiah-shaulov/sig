@@ -633,7 +633,7 @@ export class Sig<T>
 			valueHolder.defaultValue,
 			valueHolder.dependOnMe,
 			valueHolder.onChangeCallbacks,
-			idEnum++,
+			valueHolder.id,
 			curPromiseOrError,
 			undefined,
 			() => sigConvert(backingSig, compValue),
