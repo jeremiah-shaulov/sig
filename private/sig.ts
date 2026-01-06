@@ -63,7 +63,7 @@ const enum Flags
  **/
 let evalContext: SigComp<unknown> | undefined;
 let evalContextWeak: WeakRef<SigComp<unknown>> | undefined;
-let evalContextIDependOn: Sig<Any>[] | undefined;
+let evalContextIDependOn: DependRec[] | undefined;
 let evalContextIDependOnLen = 0;
 
 /**	Callbacks scheduled to be invoked when signals change.
@@ -138,7 +138,8 @@ type OnChange<T> = (this: Sig<T>, prevValue: T|Error) => void;
  **/
 type OnChangeRecord<T> = {callback: OnChange<T>, thisArg: Sig<T>, prevValue: T|Error};
 
-type DependOnMe = Map<number, {subj: WeakRef<SigComp<unknown>>, compType: CompType}>;
+type DependRec = {source: Sig<Any>, target: WeakRef<SigComp<unknown>>, compType: CompType};
+type DependOnMe = Map<number, DependRec>;
 
 /**	Proxy type for `sig.mut` that provides access to mutating methods.
 	Only includes methods (not properties) from the signal's value type.
@@ -750,37 +751,39 @@ export class Sig<T>
 function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 {	if (evalContext)
 	{	const atLen = evalContextIDependOn![evalContextIDependOnLen];
-		if (atLen === that)
-		{	evalContextIDependOnLen++;
-			that[_dependOnMe]!.get(evalContext[_valueHolder].id)!.compType = compType;
+		if (atLen?.source === that)
+		{	evalContextIDependOn![evalContextIDependOnLen++].compType = compType;
 		}
 		else
-		{	const i = evalContextIDependOn!.indexOf(that);
-			if (i == -1)
+		{	let i = evalContextIDependOn!.length;
+			while (--i >= 0)
+			{	if (evalContextIDependOn![i].source === that)
+				{	if (i > evalContextIDependOnLen)
+					{	// Dependency found later in array, swap it to current position
+						evalContextIDependOn![i].compType = compType;
+						evalContextIDependOn![evalContextIDependOnLen++] = evalContextIDependOn![i];
+						evalContextIDependOn![i] = atLen;
+					}
+					else
+					{	evalContextIDependOn![i].compType |= compType;
+					}
+					break;
+				}
+			}
+			if (i < 0)
 			{	// New dependency: check for circular references before adding
 				if (that[_valueHolder] instanceof ValueHolderComp && checkCircular(that[_valueHolder], evalContext[_valueHolder]))
 				{	throw new Error('Circular dependency detected between signals');
 				}
 				// Add bidirectional dependency links
 				evalContextWeak ??= new WeakRef(evalContext);
+				const dependRec = {source: that, target: evalContextWeak, compType};
 				that[_dependOnMe] ??= new Map;
-				that[_dependOnMe].set(evalContext[_valueHolder].id, {subj: evalContextWeak, compType});
+				that[_dependOnMe].set(evalContext[_valueHolder].id, dependRec);
 				// New dependency not in array yet
-				evalContextIDependOn![evalContextIDependOnLen++] = that;
+				evalContextIDependOn![evalContextIDependOnLen++] = dependRec;
 				if (atLen !== undefined)
 				{	evalContextIDependOn![evalContextIDependOn!.length] = atLen;
-				}
-			}
-			else
-			{	const depRef = that[_dependOnMe]?.get(evalContext[_valueHolder].id);
-				if (i > evalContextIDependOnLen)
-				{	// Dependency found later in array, swap it to current position
-					evalContextIDependOn![evalContextIDependOnLen++] = that;
-					evalContextIDependOn![i] = atLen;
-					depRef!.compType = compType;
-				}
-				else
-				{	depRef!.compType |= compType;
 				}
 			}
 		}
@@ -803,7 +806,7 @@ function checkCircular<T>(that: ValueHolderComp<T>, target: ValueHolderComp<Any>
 	{	return false;
 	}
 	visited.add(that);
-	return that.iDependOn.some(dep => dep[_valueHolder] instanceof ValueHolderComp && checkCircular(dep[_valueHolder], target, visited));
+	return that.iDependOn.some(dep => dep.source[_valueHolder] instanceof ValueHolderComp && checkCircular(dep.source[_valueHolder], target, visited));
 }
 
 /**	Base class for storing signal values and managing their state.
@@ -1023,7 +1026,7 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 {	/**	Signals that this signal depends on, along with what aspects (value/promise/error) were observed.
 		When a dependency changes, we check if the observed aspect changed to determine if recomputation is needed.
 	 **/
-	iDependOn = new Array<Sig<Any>>;
+	iDependOn = new Array<DependRec>;
 
 	constructor
 	(	flagsAndOnchangeVersion: Flags,
@@ -1243,7 +1246,7 @@ function recomp<T>(ownerSig: SigComp<T>, knownToBeChanged=false, cause?: Sig<unk
 
 function doneCollectingDeps(vh: ValueHolderComp<Any>)
 {	for (let i=evalContextIDependOnLen; i<evalContextIDependOn!.length; i++)
-	{	evalContextIDependOn![i][_dependOnMe]?.delete(vh.id);
+	{	evalContextIDependOn![i].source[_dependOnMe]?.delete(vh.id);
 	}
 	evalContextIDependOn!.length = evalContextIDependOnLen;
 }
@@ -1300,8 +1303,8 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 		}
 	}
 	if (that[_dependOnMe])
-	{	for (const [id, {subj, compType}] of that[_dependOnMe])
-		{	const dep = subj.deref();
+	{	for (const [id, {target, compType}] of that[_dependOnMe])
+		{	const dep = target.deref();
 			if (!dep)
 			{	that[_dependOnMe].delete(id);
 			}
@@ -1327,7 +1330,7 @@ function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
 {	if ((that[_valueHolder].flagsAndOnchangeVersion & ~Flags.FlagsMask) != hasOnchangeVersion)
 	{	const yes = that[_valueHolder].onChangeCallbacks?.length || that[_dependOnMe]?.values().some
 		(	depRef =>
-			{	const dep = depRef.subj.deref();
+			{	const dep = depRef.target.deref();
 				return dep && hasOnchange(dep);
 			}
 		);
