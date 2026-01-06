@@ -687,7 +687,8 @@ export class Sig<T>
 		@param callback Function to call on value changes. Can be a direct reference or WeakRef.
 	 **/
 	subscribe(callback: OnChange<T>|WeakRef<OnChange<T>>)
-	{	const {onChangeCallbacks} = this[_valueHolder];
+	{	const valueHolder = this[_valueHolder];
+		const {onChangeCallbacks} = valueHolder;
 		if (onChangeCallbacks)
 		{	const callbackFunc = callback instanceof WeakRef ? callback.deref() : callback;
 			if (traverseWeak(onChangeCallbacks).some(c => c === callbackFunc))
@@ -696,10 +697,10 @@ export class Sig<T>
 			onChangeCallbacks.push(callback as Any);
 		}
 		else
-		{	this[_valueHolder].onChangeCallbacks = [callback as Any];
+		{	valueHolder.onChangeCallbacks = [callback as Any];
 		}
 		hasOnchangeVersion += Flags.OnChangeVersionStep;
-		if ((this[_valueHolder].flagsAndOnchangeVersion & Flags.ValueStatusMask) == Flags.WantRecomp)
+		if ((valueHolder.flagsAndOnchangeVersion & Flags.ValueStatusMask) == Flags.WantRecomp)
 		{	recomp(this as Any) && flushPendingOnChange(); // this is needed if computation never called for this signal, to record dependencies
 		}
 	}
@@ -1293,10 +1294,13 @@ function invokeOnChangeCallbacks<T>(ownerSig: Sig<T>, changeType: CompType, prev
 			{	dependOnMe[i] = dependOnMe[dependOnMe.length - 1];
 				dependOnMe.length--;
 			}
-			else if ((compType & changeType) && dep[_valueHolder] instanceof ValueHolderComp && (dep[_valueHolder].flagsAndOnchangeVersion & Flags.ValueStatusMask) != Flags.RecompInProgress)
-			{	dep[_valueHolder].flagsAndOnchangeVersion = Flags.WantRecomp | (dep[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
-				if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj === dep))
-				{	pendingRecomp.push({subj: dep as Any, knownToBeChanged, cause: ownerSig});
+			else if (compType & changeType)
+			{	const valueHolder = dep[_valueHolder];
+				if (valueHolder instanceof ValueHolderComp && (valueHolder.flagsAndOnchangeVersion & Flags.ValueStatusMask) != Flags.RecompInProgress)
+				{	valueHolder.flagsAndOnchangeVersion = Flags.WantRecomp | (valueHolder.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
+					if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj === dep))
+					{	pendingRecomp.push({subj: dep as Any, knownToBeChanged, cause: ownerSig});
+					}
 				}
 			}
 		}
@@ -1312,16 +1316,17 @@ function invokeOnChangeCallbacks<T>(ownerSig: Sig<T>, changeType: CompType, prev
 	@returns Flag indicating whether onChange listeners exist
  **/
 function hasOnchange<T>(ownerSig: Sig<T>): 0 | Flags.HasOnChangePositive
-{	if ((ownerSig[_valueHolder].flagsAndOnchangeVersion & ~Flags.FlagsMask) != hasOnchangeVersion)
-	{	const yes = ownerSig[_valueHolder].onChangeCallbacks?.length || ownerSig[_dependOnMe]?.values().some
+{	const valueHolder = ownerSig[_valueHolder];
+	if ((valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask) != hasOnchangeVersion)
+	{	const yes = valueHolder.onChangeCallbacks?.length || ownerSig[_dependOnMe]?.values().some
 		(	depRef =>
 			{	const dep = depRef.target?.deref();
 				return dep && hasOnchange(dep);
 			}
 		);
-		ownerSig[_valueHolder].flagsAndOnchangeVersion = (ownerSig[_valueHolder].flagsAndOnchangeVersion & Flags.FlagsLowMask) | (yes ? hasOnchangeVersion | Flags.HasOnChangePositive : hasOnchangeVersion);
+		valueHolder.flagsAndOnchangeVersion = (valueHolder.flagsAndOnchangeVersion & Flags.FlagsLowMask) | (yes ? hasOnchangeVersion | Flags.HasOnChangePositive : hasOnchangeVersion);
 	}
-	return ownerSig[_valueHolder].flagsAndOnchangeVersion & Flags.HasOnChangePositive;
+	return valueHolder.flagsAndOnchangeVersion & Flags.HasOnChangePositive;
 }
 
 /**	Unwraps a non-promise value that might be a signal or error.
@@ -1413,12 +1418,13 @@ function getProp<T>(ownerSig: Sig<T>, propName: string|symbol): Sig<unknown>
 	@returns Converted value, promise, or error
  **/
 function sigConvert<T, R>(ownerSig: Sig<T>, compValue: (value: T) => ValueOrPromise<R>)
-{	if (ownerSig[_valueHolder] instanceof ValueHolderPromise)
+{	const valueHolder = ownerSig[_valueHolder];
+	if (valueHolder instanceof ValueHolderPromise)
 	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Value|CompType.Promise|CompType.Error);
-		if (ownerSig[_valueHolder] instanceof ValueHolderComp)
+		if (valueHolder instanceof ValueHolderComp)
 		{	recomp(ownerSig as SigComp<T>) && flushPendingOnChange();
 		}
-		const {promiseOrError} = ownerSig[_valueHolder];
+		const {promiseOrError} = valueHolder;
 		return promiseOrError instanceof Promise ? promiseOrError.then(compValue) : promiseOrError ?? compValue(ownerSig.value);
 	}
 	else
