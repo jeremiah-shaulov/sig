@@ -743,28 +743,23 @@ export class Sig<T>
 function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 {	if (evalContext)
 	{	const depRef = that[_valueHolder].dependOnMe?.get(evalContext[_valueHolder].id);
-		if (!depRef)
-		{	// New dependency: check for circular references before adding
-			if (that[_valueHolder] instanceof ValueHolderComp && checkCircular(that[_valueHolder], evalContext[_valueHolder]))
-			{	throw new Error('Circular dependency detected between signals');
-			}
-			// Add bidirectional dependency links
-			evalContextWeak ??= new WeakRef(evalContext);
-			that[_valueHolder].dependOnMe ??= new Map;
-			that[_valueHolder].dependOnMe.set(evalContext[_valueHolder].id, {subj: evalContextWeak, compType});
-		}
-		else
-		{	// Existing dependency: update what aspects are observed
-			depRef.compType |= compType;
-		}
 		const atLen = evalContextIDependOn![evalContextIDependOnLen];
 		if (atLen === that)
 		{	evalContextIDependOnLen++;
+			depRef!.compType = compType;
 		}
 		else
 		{	const i = evalContextIDependOn!.indexOf(that);
 			if (i == -1)
-			{	// New dependency not in array yet
+			{	// New dependency: check for circular references before adding
+				if (that[_valueHolder] instanceof ValueHolderComp && checkCircular(that[_valueHolder], evalContext[_valueHolder]))
+				{	throw new Error('Circular dependency detected between signals');
+				}
+				// Add bidirectional dependency links
+				evalContextWeak ??= new WeakRef(evalContext);
+				that[_valueHolder].dependOnMe ??= new Map;
+				that[_valueHolder].dependOnMe.set(evalContext[_valueHolder].id, {subj: evalContextWeak, compType});
+				// New dependency not in array yet
 				evalContextIDependOn![evalContextIDependOnLen++] = that;
 				if (atLen !== undefined)
 				{	evalContextIDependOn![evalContextIDependOn!.length] = atLen;
@@ -774,6 +769,10 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 			{	// Dependency found later in array, swap it to current position
 				evalContextIDependOn![evalContextIDependOnLen++] = that;
 				evalContextIDependOn![i] = atLen;
+				depRef!.compType = compType;
+			}
+			else
+			{	depRef!.compType |= compType;
 			}
 		}
 	}
