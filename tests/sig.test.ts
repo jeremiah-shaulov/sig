@@ -146,8 +146,8 @@ Deno.test
 		// Change `userName`
 
 		userName.set('');
-		assertEquals(calc, ['user', 'userNameOrEmail', 'email']); // email is touched for the first time
-		assertEquals(changes, ['userName', 'user', 'userNameOrEmail']);
+		assertEquals(calc, ['userNameOrEmail', 'email', 'user']); // email is touched for the first time
+		assertEquals(changes, ['userName', 'userNameOrEmail', 'user']);
 		calc.length = 0;
 		changes.length = 0;
 
@@ -158,8 +158,8 @@ Deno.test
 		// Change `userName`
 
 		userName.set('Dave');
-		assertEquals(calc, ['user', 'userNameOrEmail']);
-		assertEquals(changes, ['userName', 'user', 'userNameOrEmail']);
+		assertEquals(calc, ['userNameOrEmail', 'user']);
+		assertEquals(changes, ['userName', 'userNameOrEmail', 'user']);
 		calc.length = 0;
 		changes.length = 0;
 

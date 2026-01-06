@@ -79,9 +79,6 @@ const pendingRecomp = new Array<{subj: SigComp<unknown>, knownToBeChanged: boole
 /**	Nesting level of batch() calls. When > 0, changes are deferred until all batches complete. **/
 let batchLevel = 0;
 
-/**	Counter for assigning unique IDs to signal instances. **/
-let idEnum = 0;
-
 /**	Global version number for onChange listener tracking.
 	Incremented when subscriptions change to invalidate cached hasOnchange() results.
 	Stored in high bits of _flagsAndOnchangeVersion.
@@ -138,8 +135,8 @@ type OnChange<T> = (this: Sig<T>, prevValue: T|Error) => void;
  **/
 type OnChangeRecord<T> = {callback: OnChange<T>, thisArg: Sig<T>, prevValue: T|Error};
 
-type DependRec = {source: Sig<Any>, target: WeakRef<SigComp<unknown>>, compType: CompType};
-type DependOnMe = Map<number, DependRec>;
+type DependRec = {source: Sig<Any>, target: WeakRef<SigComp<unknown>>|undefined, compType: CompType};
+type DependOnMe = DependRec[];
 
 /**	Proxy type for `sig.mut` that provides access to mutating methods.
 	Only includes methods (not properties) from the signal's value type.
@@ -526,7 +523,7 @@ export class Sig<T>
 	 **/
 	get error(): Sig<Error|undefined>
 	{	if (!this.#errorSig)
-		{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, idEnum++, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
+		{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
 			this.#errorSig = new Sig(valueHolder);
 		}
 		return this.#errorSig;
@@ -537,7 +534,7 @@ export class Sig<T>
 	 **/
 	get busy(): Sig<boolean>
 	{	if (!this.#busySig)
-		{	const valueHolder: ValueHolder<boolean> = new ValueHolderComp(Flags.WantRecomp, false, false, undefined, idEnum++, undefined, undefined, () => !!this.promise);
+		{	const valueHolder: ValueHolder<boolean> = new ValueHolderComp(Flags.WantRecomp, false, false, undefined, undefined, undefined, () => !!this.promise);
 			this.#busySig = new Sig(valueHolder);
 		}
 		return this.#busySig;
@@ -636,14 +633,13 @@ export class Sig<T>
 	{	// Create a backing signal to hold the raw value
 		const valueHolder = this[_valueHolder];
 		const curPromiseOrError = valueHolder instanceof ValueHolderPromise ? valueHolder.promiseOrError : undefined;
-		const backingSig = new Sig(new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & Flags.FlagsMask, valueHolder.get(this), valueHolder.defaultValue, undefined, idEnum++, curPromiseOrError));
+		const backingSig = new Sig(new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & Flags.FlagsMask, valueHolder.get(this), valueHolder.defaultValue, undefined, curPromiseOrError));
 		// Convert this signal to a computed signal that applies the converter
 		this[_valueHolder] = new ValueHolderConv<T>
 		(	valueHolder.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp,
 			valueHolder.value,
 			valueHolder.defaultValue,
 			valueHolder.onChangeCallbacks,
-			valueHolder.id,
 			curPromiseOrError,
 			undefined,
 			() => sigConvert(backingSig, compValue),
@@ -675,7 +671,7 @@ export class Sig<T>
 	unsetConverter()
 	{	const valueHolder = this[_valueHolder];
 		if (valueHolder instanceof ValueHolderConv)
-		{	this[_valueHolder] = new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & Flags.FlagsMask, valueHolder.get(this), valueHolder.defaultValue, valueHolder.onChangeCallbacks, idEnum++, valueHolder.promiseOrError);
+		{	this[_valueHolder] = new ValueHolderPromise(valueHolder.flagsAndOnchangeVersion & Flags.FlagsMask, valueHolder.get(this), valueHolder.defaultValue, valueHolder.onChangeCallbacks, valueHolder.promiseOrError);
 		}
 	}
 
@@ -778,8 +774,7 @@ function addMyselfAsDepToBeingComputed<T>(ownerSig: Sig<T>, compType: CompType)
 				// Add bidirectional dependency links
 				evalContextWeak ??= new WeakRef(evalContext);
 				const dependRec = {source: ownerSig, target: evalContextWeak, compType};
-				ownerSig[_dependOnMe] ??= new Map;
-				ownerSig[_dependOnMe].set(evalContext[_valueHolder].id, dependRec);
+				(ownerSig[_dependOnMe] ??= []).push(dependRec);
 				// New dependency not in array yet
 				evalContextIDependOn![evalContextIDependOnLen++] = dependRec;
 				if (atLen !== undefined)
@@ -822,10 +817,6 @@ class ValueHolder<T>
 		/**	Callbacks to invoke when the signal's value changes.
 		**/
 		public onChangeCallbacks?: Array<OnChange<unknown> | WeakRef<OnChange<unknown>>>,
-
-		/**	Unique identifier for each signal instance, used in dependency tracking maps.
-		 **/
-		public id = idEnum++,
 	){}
 
 	get(ownerSig: Sig<T>)
@@ -881,19 +872,19 @@ class ValueHolder<T>
 	adopt(ownerSig: Sig<T>, compValue: ValueOrPromise<T>|CompValue<T>, cancelComp?: CancelComp<T>): CompType
 	{	if (typeof(compValue)=='function' || compValue instanceof Sig)
 		{	// Upgrade to ValueHolderComp
-			const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, this.onChangeCallbacks, this.id, undefined, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
+			const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, this.onChangeCallbacks, undefined, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
 			ownerSig[_valueHolder] = newValueHolder;
 			return recomp(ownerSig as SigComp<T>, false, undefined, true);
 		}
 		if (compValue instanceof Promise)
 		{	// Upgrade to ValueHolderPromise
-			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.onChangeCallbacks, this.id, undefined, cancelComp);
+			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.onChangeCallbacks, undefined, cancelComp);
 			ownerSig[_valueHolder] = newValueHolder;
 			return valueHolderPromiseUpdate(ownerSig, convPromise(compValue));
 		}
 		if (compValue instanceof Error)
 		{	// Upgrade to ValueHolderPromise with error
-			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.onChangeCallbacks, this.id);
+			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.onChangeCallbacks);
 			ownerSig[_valueHolder] = newValueHolder;
 			return valueHolderPromiseUpdate(ownerSig, compValue);
 		}
@@ -913,11 +904,10 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		prevValue: T,
 		defaultValue: T,
 		onChangeCallbacks: Array<OnChange<unknown> | WeakRef<OnChange<unknown>>> | undefined,
-		id: number,
 		promiseOrError?: Error|Promise<Value<T>>,
 		public cancelComp?: CancelComp<T>
 	)
-	{	super(flagsAndOnchangeVersion, prevValue, defaultValue, onChangeCallbacks, id);
+	{	super(flagsAndOnchangeVersion, prevValue, defaultValue, onChangeCallbacks);
 		this.promiseOrError = promiseOrError instanceof Promise ? convPromise(promiseOrError) : promiseOrError;
 	}
 
@@ -1005,7 +995,7 @@ class ValueHolderPromise<T> extends ValueHolder<T>
 		}
 		if (typeof(compValue)=='function' || compValue instanceof Sig)
 		{	// Upgrade to ValueHolderComp
-			const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, this.onChangeCallbacks, this.id, this.promiseOrError, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
+			const newValueHolder = new ValueHolderComp<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask | Flags.WantRecomp, this.value, this.defaultValue, this.onChangeCallbacks, this.promiseOrError, compValue instanceof Sig ? undefined : cancelComp, compValue as Sig<T>|CompValue<T>);
 			ownerSig[_valueHolder] = newValueHolder;
 			return recomp(ownerSig as SigComp<T>, false, undefined, true);
 		}
@@ -1033,13 +1023,12 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		prevValue: T,
 		defaultValue: T,
 		onChangeCallbacks: Array<OnChange<unknown> | WeakRef<OnChange<unknown>>> | undefined,
-		id: number,
 		prevPromiseOrError: Promise<T>|Error|undefined,
 		cancelComp: CancelComp<T>|undefined,
 		public compValue: Sig<T>|CompValue<T>,
 		public setValue?: SetValue<T>
 	)
-	{	super(flagsAndOnchangeVersion, prevValue, defaultValue, onChangeCallbacks, id, prevPromiseOrError, cancelComp);
+	{	super(flagsAndOnchangeVersion, prevValue, defaultValue, onChangeCallbacks, prevPromiseOrError, cancelComp);
 	}
 
 	/**	Gets the signal's value, triggering recomputation if needed.
@@ -1079,12 +1068,12 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		}
 		if (compValue instanceof Promise)
 		{	// Downgrade to ValueHolderPromise
-			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.onChangeCallbacks, this.id, this.promiseOrError, cancelComp);
+			const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.onChangeCallbacks, this.promiseOrError, cancelComp);
 			ownerSig[_valueHolder] = newValueHolder;
 			return valueHolderPromiseUpdate(ownerSig, convPromise(compValue));
 		}
 		// Downgrade to ValueHolderPromise
-		const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.onChangeCallbacks, this.id, this.promiseOrError);
+		const newValueHolder = new ValueHolderPromise<T>(this.flagsAndOnchangeVersion & ~Flags.FlagsMask, this.value, this.defaultValue, this.onChangeCallbacks, this.promiseOrError);
 		ownerSig[_valueHolder] = newValueHolder;
 		return valueHolderPromiseUpdate(ownerSig, compValue);
 	}
@@ -1232,7 +1221,10 @@ function recomp<T>(ownerSig: SigComp<T>, knownToBeChanged=false, cause?: Sig<unk
 		catch (e)
 		{	newValue = e instanceof Error ? e : new Error(e+'');
 		}
-		doneCollectingDeps(valueHolder);
+		for (let i=evalContextIDependOnLen; i<evalContextIDependOn!.length; i++)
+		{	evalContextIDependOn![i].target = undefined; // Remove bidirectional link for unused dependencies
+		}
+		evalContextIDependOn!.length = evalContextIDependOnLen;
 		evalContext = prevEvalContext;
 		evalContextWeak = prevEvalContextWeak;
 		evalContextIDependOn = prevEvalContextIDependOn;
@@ -1242,13 +1234,6 @@ function recomp<T>(ownerSig: SigComp<T>, knownToBeChanged=false, cause?: Sig<unk
 		return valueHolderPromiseUpdate(ownerSig, newValue, knownToBeChanged);
 	}
 	return CompType.None;
-}
-
-function doneCollectingDeps(vh: ValueHolderComp<Any>)
-{	for (let i=evalContextIDependOnLen; i<evalContextIDependOn!.length; i++)
-	{	evalContextIDependOn![i].source[_dependOnMe]?.delete(vh.id);
-	}
-	evalContextIDependOn!.length = evalContextIDependOnLen;
 }
 
 /**	Resumes dependency tracking after an async await point.
@@ -1270,8 +1255,7 @@ function sigSync<T>(this: SigComp<T>)
 		vh.flagsAndOnchangeVersion = Flags.RecompInProgress | (vh.flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 		queueMicrotask
 		(	() =>
-			{	// Don't call doneCollectingDeps here - let recomp handle it
-				evalContext = prevEvalContext;
+			{	evalContext = prevEvalContext;
 				evalContextWeak = prevEvalContextWeak;
 				evalContextIDependOn = prevEvalContextIDependOn;
 				evalContextIDependOnLen = prevEvalContextIDependOnLen;
@@ -1300,11 +1284,14 @@ function invokeOnChangeCallbacks<T>(ownerSig: Sig<T>, changeType: CompType, prev
 			}
 		}
 	}
-	if (ownerSig[_dependOnMe])
-	{	for (const [id, {target, compType}] of ownerSig[_dependOnMe])
-		{	const dep = target.deref();
+	const dependOnMe = ownerSig[_dependOnMe];
+	if (dependOnMe)
+	{	for (let i=dependOnMe.length-1; i>=0; i--)
+		{	const {target, compType} = dependOnMe[i];
+			const dep = target?.deref();
 			if (!dep)
-			{	ownerSig[_dependOnMe].delete(id);
+			{	dependOnMe[i] = dependOnMe[dependOnMe.length - 1];
+				dependOnMe.length--;
 			}
 			else if ((compType & changeType) && dep[_valueHolder] instanceof ValueHolderComp && (dep[_valueHolder].flagsAndOnchangeVersion & Flags.ValueStatusMask) != Flags.RecompInProgress)
 			{	dep[_valueHolder].flagsAndOnchangeVersion = Flags.WantRecomp | (dep[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
@@ -1328,7 +1315,7 @@ function hasOnchange<T>(ownerSig: Sig<T>): 0 | Flags.HasOnChangePositive
 {	if ((ownerSig[_valueHolder].flagsAndOnchangeVersion & ~Flags.FlagsMask) != hasOnchangeVersion)
 	{	const yes = ownerSig[_valueHolder].onChangeCallbacks?.length || ownerSig[_dependOnMe]?.values().some
 		(	depRef =>
-			{	const dep = depRef.target.deref();
+			{	const dep = depRef.target?.deref();
 				return dep && hasOnchange(dep);
 			}
 		);
@@ -1520,11 +1507,11 @@ export function sig<T>(...args: undefined extends T ? [Error?] : never): Sig<T>;
 
 export function sig<T>(compValue?: ValueOrPromise<T>|CompValue<T>, defaultValue?: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>): Sig<T>
 {	if (typeof(compValue)=='function' || compValue instanceof Sig)
-	{	const valueHolder: ValueHolder<T> = new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, idEnum++, undefined, cancelComp, compValue as CompValue<T>, setValue);
+	{	const valueHolder: ValueHolder<T> = new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, undefined, cancelComp, compValue as CompValue<T>, setValue);
 		return new Sig(valueHolder);
 	}
 	if (compValue instanceof Promise || compValue instanceof Error)
-	{	const valueHolder: ValueHolder<T> = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, undefined, idEnum++, compValue, cancelComp);
+	{	const valueHolder: ValueHolder<T> = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, undefined, compValue, cancelComp);
 		return new Sig(valueHolder);
 	}
 	return new Sig
