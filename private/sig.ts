@@ -749,11 +749,10 @@ export class Sig<T>
  **/
 function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 {	if (evalContext)
-	{	const depRef = that[_dependOnMe]?.get(evalContext[_valueHolder].id);
-		const atLen = evalContextIDependOn![evalContextIDependOnLen];
+	{	const atLen = evalContextIDependOn![evalContextIDependOnLen];
 		if (atLen === that)
 		{	evalContextIDependOnLen++;
-			depRef!.compType = compType;
+			that[_dependOnMe]!.get(evalContext[_valueHolder].id)!.compType = compType;
 		}
 		else
 		{	const i = evalContextIDependOn!.indexOf(that);
@@ -772,14 +771,17 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 				{	evalContextIDependOn![evalContextIDependOn!.length] = atLen;
 				}
 			}
-			else if (i > evalContextIDependOnLen)
-			{	// Dependency found later in array, swap it to current position
-				evalContextIDependOn![evalContextIDependOnLen++] = that;
-				evalContextIDependOn![i] = atLen;
-				depRef!.compType = compType;
-			}
 			else
-			{	depRef!.compType |= compType;
+			{	const depRef = that[_dependOnMe]?.get(evalContext[_valueHolder].id);
+				if (i > evalContextIDependOnLen)
+				{	// Dependency found later in array, swap it to current position
+					evalContextIDependOn![evalContextIDependOnLen++] = that;
+					evalContextIDependOn![i] = atLen;
+					depRef!.compType = compType;
+				}
+				else
+				{	depRef!.compType |= compType;
+				}
 			}
 		}
 	}
