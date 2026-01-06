@@ -898,18 +898,15 @@ class ValueHolder<T>
 	Used for signals created with promises or that can transition to promise/error states.
  **/
 class ValueHolderPromise<T> extends ValueHolder<T>
-{	promiseOrError: Promise<T> | Error | undefined;
-
-	constructor
+{	constructor
 	(	flagsAndOnchangeVersion: Flags,
 		prevValue: T,
 		defaultValue: T,
 		onChangeCallbacks: Array<OnChange<unknown> | WeakRef<OnChange<unknown>>> | undefined,
-		promiseOrError?: Error|Promise<Value<T>>,
+		public promiseOrError?: Error|Promise<T>,
 		public cancelComp?: CancelComp<T>
 	)
 	{	super(flagsAndOnchangeVersion, prevValue, defaultValue, onChangeCallbacks);
-		this.promiseOrError = promiseOrError instanceof Promise ? convPromise(promiseOrError) : promiseOrError;
 	}
 
 	/**	Returns the Error object if this signal is in error state.
@@ -1516,7 +1513,11 @@ export function sig<T>(compValue?: ValueOrPromise<T>|CompValue<T>, defaultValue?
 	{	const valueHolder: ValueHolder<T> = new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, undefined, cancelComp, compValue as CompValue<T>, setValue);
 		return new Sig(valueHolder);
 	}
-	if (compValue instanceof Promise || compValue instanceof Error)
+	if (compValue instanceof Promise)
+	{	const valueHolder: ValueHolder<T> = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, undefined, convPromise(compValue), cancelComp);
+		return new Sig(valueHolder);
+	}
+	if (compValue instanceof Error)
 	{	const valueHolder: ValueHolder<T> = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, undefined, compValue, cancelComp);
 		return new Sig(valueHolder);
 	}
