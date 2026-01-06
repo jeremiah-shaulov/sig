@@ -745,19 +745,19 @@ export class Sig<T>
 	When this signal changes, the dependent will be marked for recomputation.
 	Tracks which aspects (value/promise/error) were observed to minimize unnecessary updates.
 
-	@param that The signal being accessed (dependency)
+	@param ownerSig The signal being accessed (dependency)
 	@param compType Which aspect of the signal was accessed (value/promise/error)
  **/
-function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
+function addMyselfAsDepToBeingComputed<T>(ownerSig: Sig<T>, compType: CompType)
 {	if (evalContext)
 	{	const atLen = evalContextIDependOn![evalContextIDependOnLen];
-		if (atLen?.source === that)
+		if (atLen?.source === ownerSig)
 		{	evalContextIDependOn![evalContextIDependOnLen++].compType = compType;
 		}
 		else
 		{	let i = evalContextIDependOn!.length;
 			while (--i >= 0)
-			{	if (evalContextIDependOn![i].source === that)
+			{	if (evalContextIDependOn![i].source === ownerSig)
 				{	if (i > evalContextIDependOnLen)
 					{	// Dependency found later in array, swap it to current position
 						evalContextIDependOn![i].compType = compType;
@@ -772,14 +772,14 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 			}
 			if (i < 0)
 			{	// New dependency: check for circular references before adding
-				if (that[_valueHolder] instanceof ValueHolderComp && checkCircular(that[_valueHolder], evalContext[_valueHolder]))
+				if (ownerSig[_valueHolder] instanceof ValueHolderComp && checkCircular(ownerSig[_valueHolder], evalContext[_valueHolder]))
 				{	throw new Error('Circular dependency detected between signals');
 				}
 				// Add bidirectional dependency links
 				evalContextWeak ??= new WeakRef(evalContext);
-				const dependRec = {source: that, target: evalContextWeak, compType};
-				that[_dependOnMe] ??= new Map;
-				that[_dependOnMe].set(evalContext[_valueHolder].id, dependRec);
+				const dependRec = {source: ownerSig, target: evalContextWeak, compType};
+				ownerSig[_dependOnMe] ??= new Map;
+				ownerSig[_dependOnMe].set(evalContext[_valueHolder].id, dependRec);
 				// New dependency not in array yet
 				evalContextIDependOn![evalContextIDependOnLen++] = dependRec;
 				if (atLen !== undefined)
@@ -793,20 +793,20 @@ function addMyselfAsDepToBeingComputed<T>(that: Sig<T>, compType: CompType)
 /**	Detects circular dependencies in the signal dependency graph.
 	Prevents infinite loops by checking if a signal depends on itself through a chain.
 
-	@param that Starting signal to check
+	@param ownerSig Starting signal to check
 	@param target Signal to search for in the dependency chain
 	@param visited Set of already-visited signals to avoid infinite loops
 	@returns true if circular dependency detected, false otherwise
  **/
-function checkCircular<T>(that: ValueHolderComp<T>, target: ValueHolderComp<Any>, visited=new Set<ValueHolderComp<Any>>): boolean
-{	if (that === target)
+function checkCircular<T>(ownerSig: ValueHolderComp<T>, target: ValueHolderComp<Any>, visited=new Set<ValueHolderComp<Any>>): boolean
+{	if (ownerSig === target)
 	{	return true;
 	}
-	if (visited.has(that))
+	if (visited.has(ownerSig))
 	{	return false;
 	}
-	visited.add(that);
-	return that.iDependOn.some(dep => dep.source[_valueHolder] instanceof ValueHolderComp && checkCircular(dep.source[_valueHolder], target, visited));
+	visited.add(ownerSig);
+	return ownerSig.iDependOn.some(dep => dep.source[_valueHolder] instanceof ValueHolderComp && checkCircular(dep.source[_valueHolder], target, visited));
 }
 
 /**	Base class for storing signal values and managing their state.
@@ -1254,8 +1254,6 @@ function doneCollectingDeps(vh: ValueHolderComp<Any>)
 /**	Resumes dependency tracking after an async await point.
 	Called by user code via the sync() callback parameter in async computations.
 	Temporarily resets evalContext to allow tracking new dependencies.
-
-	@param that The signal whose computation is being synchronized
  **/
 function sigSync<T>(this: SigComp<T>)
 {	const compSubj = this as Sig<unknown>;
@@ -1288,30 +1286,30 @@ function sigSync<T>(this: SigComp<T>)
 	Only triggers recomputation of dependents that observed the changed aspect.
 	Cleansup garbage-collected weak references during iteration.
 
-	@param that Signal that changed
+	@param ownerSig Signal that changed
 	@param changeType Which aspects changed (value/promise/error)
 	@param prevValue Previous value or error (passed to callbacks)
 	@param knownToBeChanged Whether we know dependents need recomputation
  **/
-function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValue?: T|Error, knownToBeChanged=false)
-{	const {onChangeCallbacks} = that[_valueHolder];
+function invokeOnChangeCallbacks<T>(ownerSig: Sig<T>, changeType: CompType, prevValue?: T|Error, knownToBeChanged=false)
+{	const {onChangeCallbacks} = ownerSig[_valueHolder];
 	if (onChangeCallbacks)
 	{	for (const callback of traverseWeak(onChangeCallbacks))
 		{	if (!pendingOnChange.some(p => p.callback===callback))
-			{	pendingOnChange.push({callback, thisArg: that, prevValue});
+			{	pendingOnChange.push({callback, thisArg: ownerSig, prevValue});
 			}
 		}
 	}
-	if (that[_dependOnMe])
-	{	for (const [id, {target, compType}] of that[_dependOnMe])
+	if (ownerSig[_dependOnMe])
+	{	for (const [id, {target, compType}] of ownerSig[_dependOnMe])
 		{	const dep = target.deref();
 			if (!dep)
-			{	that[_dependOnMe].delete(id);
+			{	ownerSig[_dependOnMe].delete(id);
 			}
 			else if ((compType & changeType) && dep[_valueHolder] instanceof ValueHolderComp && (dep[_valueHolder].flagsAndOnchangeVersion & Flags.ValueStatusMask) != Flags.RecompInProgress)
 			{	dep[_valueHolder].flagsAndOnchangeVersion = Flags.WantRecomp | (dep[_valueHolder].flagsAndOnchangeVersion & ~Flags.ValueStatusMask);
 				if (hasOnchange(dep) && !pendingRecomp.some(p => p.subj === dep))
-				{	pendingRecomp.push({subj: dep as Any, knownToBeChanged, cause: that});
+				{	pendingRecomp.push({subj: dep as Any, knownToBeChanged, cause: ownerSig});
 				}
 			}
 		}
@@ -1323,20 +1321,20 @@ function invokeOnChangeCallbacks<T>(that: Sig<T>, changeType: CompType, prevValu
 	When the version changes (due to subscribe/unsubscribe), cached results are invalidated.
 	Recursively checks dependent signals to find transitive listeners.
 
-	@param that Signal to check
+	@param ownerSig Signal to check
 	@returns Flag indicating whether onChange listeners exist
  **/
-function hasOnchange<T>(that: Sig<T>): 0 | Flags.HasOnChangePositive
-{	if ((that[_valueHolder].flagsAndOnchangeVersion & ~Flags.FlagsMask) != hasOnchangeVersion)
-	{	const yes = that[_valueHolder].onChangeCallbacks?.length || that[_dependOnMe]?.values().some
+function hasOnchange<T>(ownerSig: Sig<T>): 0 | Flags.HasOnChangePositive
+{	if ((ownerSig[_valueHolder].flagsAndOnchangeVersion & ~Flags.FlagsMask) != hasOnchangeVersion)
+	{	const yes = ownerSig[_valueHolder].onChangeCallbacks?.length || ownerSig[_dependOnMe]?.values().some
 		(	depRef =>
 			{	const dep = depRef.target.deref();
 				return dep && hasOnchange(dep);
 			}
 		);
-		that[_valueHolder].flagsAndOnchangeVersion = (that[_valueHolder].flagsAndOnchangeVersion & Flags.FlagsLowMask) | (yes ? hasOnchangeVersion | Flags.HasOnChangePositive : hasOnchangeVersion);
+		ownerSig[_valueHolder].flagsAndOnchangeVersion = (ownerSig[_valueHolder].flagsAndOnchangeVersion & Flags.FlagsLowMask) | (yes ? hasOnchangeVersion | Flags.HasOnChangePositive : hasOnchangeVersion);
 	}
-	return that[_valueHolder].flagsAndOnchangeVersion & Flags.HasOnChangePositive;
+	return ownerSig[_valueHolder].flagsAndOnchangeVersion & Flags.HasOnChangePositive;
 }
 
 /**	Unwraps a non-promise value that might be a signal or error.
@@ -1373,14 +1371,14 @@ function convPromise<T>(compValue: Promise<Value<T>>): Promise<T>
 	Creates a computed signal that re-evaluates the method when dependencies change.
 	Unwraps signal arguments to their values before calling the method.
 
-	@param that Property signal representing a method
+	@param ownerSig Property signal representing a method
 	@param args Arguments passed to the method (may include signals)
 	@returns Proxy-wrapped signal containing the method's return value
  **/
-function sigApply<T>(that: Sig<T>, args?: unknown[]): Any
-{	const parentSig = that[_propOfSignal]?.parent;
-	if (parentSig && typeof(that.value) == 'function') // if is a method of a parent signal's value
-	{	const path = that[_propOfSignal]!.path;
+function sigApply<T>(ownerSig: Sig<T>, args?: unknown[]): Any
+{	const parentSig = ownerSig[_propOfSignal]?.parent;
+	if (parentSig && typeof(ownerSig.value) == 'function') // if is a method of a parent signal's value
+	{	const path = ownerSig[_propOfSignal]!.path;
 		const useArgs = args ?? [];
 		return parentSig.convert
 		(	v => followPath(v, path, path.length-1)?.[path[path.length - 1]]?.(...useArgs.map(a => a instanceof Sig ? a.value : a))
@@ -1393,14 +1391,14 @@ function sigApply<T>(that: Sig<T>, args?: unknown[]): Any
 	Setting the property signal updates the parent signal's value.
 	Tracks the property path for nested property access.
 
-	@param that Parent signal
+	@param ownerSig Parent signal
 	@param propName Property name to access
 	@returns Proxy-wrapped signal representing the property
  **/
-function getProp<T>(that: Sig<T>, propName: string|symbol): Sig<unknown>
-{	const propOfSignal = that[_propOfSignal]?.parent;
-	const propOfSignalPath = that[_propOfSignal]?.path;
-	const parent: Sig<Any> = propOfSignal ?? that;
+function getProp<T>(ownerSig: Sig<T>, propName: string|symbol): Sig<unknown>
+{	const propOfSignal = ownerSig[_propOfSignal]?.parent;
+	const propOfSignalPath = ownerSig[_propOfSignal]?.path;
+	const parent: Sig<Any> = propOfSignal ?? ownerSig;
 	const path = propOfSignalPath ? [...propOfSignalPath, propName] : [propName];
 	const result = parent.convert<unknown>
 	(	v => followPath(v, path, path.length),
@@ -1423,21 +1421,21 @@ function getProp<T>(that: Sig<T>, propName: string|symbol): Sig<unknown>
 	If signal is in promise state, waits for resolution before converting.
 	If signal is in error state, propagates the error without conversion.
 
-	@param that Signal to convert
+	@param ownerSig Signal to convert
 	@param compValue Conversion function
 	@returns Converted value, promise, or error
  **/
-function sigConvert<T, R>(that: Sig<T>, compValue: (value: T) => ValueOrPromise<R>)
-{	if (that[_valueHolder] instanceof ValueHolderPromise)
-	{	addMyselfAsDepToBeingComputed(that, CompType.Value|CompType.Promise|CompType.Error);
-		if (that[_valueHolder] instanceof ValueHolderComp)
-		{	recomp(that as SigComp<T>) && flushPendingOnChange();
+function sigConvert<T, R>(ownerSig: Sig<T>, compValue: (value: T) => ValueOrPromise<R>)
+{	if (ownerSig[_valueHolder] instanceof ValueHolderPromise)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Value|CompType.Promise|CompType.Error);
+		if (ownerSig[_valueHolder] instanceof ValueHolderComp)
+		{	recomp(ownerSig as SigComp<T>) && flushPendingOnChange();
 		}
-		const {promiseOrError} = that[_valueHolder];
-		return promiseOrError instanceof Promise ? promiseOrError.then(compValue) : promiseOrError ?? compValue(that.value);
+		const {promiseOrError} = ownerSig[_valueHolder];
+		return promiseOrError instanceof Promise ? promiseOrError.then(compValue) : promiseOrError ?? compValue(ownerSig.value);
 	}
 	else
-	{	return compValue(that.value);
+	{	return compValue(ownerSig.value);
 	}
 }
 
