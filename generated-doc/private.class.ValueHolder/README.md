@@ -8,13 +8,12 @@ Subclasses extend this to handle promises and computed values.
 
 ## This class has
 
-- [constructor](#-constructorflagsandonchangeversion-flags-value-t-defaultvalue-t-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown-id-numberidenum)
-- 5 properties:
+- [constructor](#-constructorflagsandonchangeversion-flags-value-t-defaultvalue-t-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown)
+- 4 properties:
 [flagsAndOnchangeVersion](#-flagsandonchangeversion-flags),
 [value](#-value-t),
 [defaultValue](#-defaultvalue-t),
-[onChangeCallbacks](#-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown),
-[id](#-id-number)
+[onChangeCallbacks](#-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown)
 - 5 methods:
 [get](#-getownersig-sigt-t),
 [getErrorValue](#-geterrorvalueownersig-sigt-error),
@@ -23,7 +22,7 @@ Subclasses extend this to handle promises and computed values.
 [adopt](#-adoptownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype)
 
 
-#### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), value: T, defaultValue: T, onChangeCallbacks?: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>>, id: `number`=idEnum++)
+#### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), value: T, defaultValue: T, onChangeCallbacks?: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>>)
 
 
 
@@ -42,12 +41,6 @@ Subclasses extend this to handle promises and computed values.
 #### 📄 onChangeCallbacks?: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>>
 
 > Callbacks to invoke when the signal's value changes.
-
-
-
-#### 📄 id: `number`
-
-> Unique identifier for each signal instance, used in dependency tracking maps.
 
 
 

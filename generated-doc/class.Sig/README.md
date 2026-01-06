@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.17"
+import {Sig} from "jsr:@shaulov/sig@0.0.18"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
