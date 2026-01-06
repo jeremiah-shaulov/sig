@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {batch} from "jsr:@shaulov/sig@0.0.16"
+import {batch} from "jsr:@shaulov/sig@0.0.17"
 ```
 
 `function` batch\<T>(callback: () => T): T
