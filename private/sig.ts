@@ -52,9 +52,10 @@ const enum Flags
 
 /**	The currently evaluating signal, used to track dependencies during computation.
 
-	When a signal starts computation, it becomes the evalContext.
-	Other signals accessed during computation register the evalContext as a dependent.
-	When the computation ends, evalContext is restored to its previous value.
+	When a computed signal starts evaluation, it sets itself as the evalContext.
+	Any signal accessed during this evaluation (via .value, .error, .promise) will
+	register the evalContext as a dependent, creating a bidirectional link.
+	When evaluation completes, evalContext is restored to its previous value.
 
 	This mechanism ensures that nested signal computations correctly track
 	their dependencies to the appropriate parent computation.
@@ -463,14 +464,14 @@ export class Sig<T>
 		return this.#this;
 	}
 
-	/**	Provides access to mutable methods that trigger change notifications.
+	/**	Provides access to mutating methods that trigger change notifications.
 
 		Normally, signals detect changes only through `set()` calls using deep equality.
 		Direct mutations don't trigger updates:
 
 		```ts
 		const sigA = sig(['a', 'b', 'c']);
-		const sigS = sigA.slice(1);
+		const sigS = sigA.this.slice(1);
 
 		console.log(sigS.value); // ['b', 'c']
 
@@ -490,7 +491,7 @@ export class Sig<T>
 		console.log(sigS.value); // ['b', 'c', 'd']
 		```
 
-		If the called method returned a Promise, the notification is triggered after it resolves.
+		For async methods that return a Promise, the notification is triggered after the promise resolves.
 		For rejected Promises, no notification occurs.
 		**/
 	get mut(): MutSig<T>
@@ -558,8 +559,9 @@ export class Sig<T>
 	/**	Creates a new signal by applying a transformation function to this signal's value.
 		The conversion function receives the value and returns the transformed result.
 		Promises and errors propagate through the conversion:
-		- Promise state: Conversion applied after promise resolves
-		- Error state: Error propagates to the converted signal
+		- When in error state: The error propagates to the converted signal without calling the conversion function
+		- When in promise state: The conversion function is called after the promise resolves
+		- When in value state: The conversion function is called immediately
 
 		```ts
 		const pathname = sig('/path/to/file.txt');
@@ -854,8 +856,10 @@ class ValueHolder<T>
 		return changeType;
 	}
 
-	/**	Sets a new value for the signal, potentially converting the ValueHolder type.
-		Converts to ValueHolderComp for functions/signals, ValueHolderPromise for promises/errors.
+	/**	Sets a new value for the signal, potentially upgrading the ValueHolder type.
+		Upgrades to ValueHolderComp when given a function or signal (to enable computation).
+		Upgrades to ValueHolderPromise when given a promise or error (to track promise/error state).
+		For plain values, sets the value directly without changing the ValueHolder type.
 
 		@param ownerSig The signal being updated
 		@param compValue New value, promise, computation function, or signal

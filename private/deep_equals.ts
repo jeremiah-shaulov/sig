@@ -125,8 +125,9 @@ M:			for (const [aKey, aValue] of a)
 }
 
 /**	Adds an object to the parent stack and checks for circular references.
-	Circularity is detected by comparing with ancestors every 4 levels.
-	This optimization balances performance with circular detection.
+	Circularity is detected by comparing with ancestors, but only at every 4th level.
+	This optimization avoids the cost of checking every single level while still detecting
+	circular references in reasonable time.
 
 	@param parents Stack of parent objects
 	@param obj Object to add to the stack
