@@ -30,13 +30,15 @@ function subequals(a: object, b: object, aCircular: boolean, bCircular: boolean,
 	// compare nonobjects in regular way (already compared above)
 	// compare objects by reference (already compared above), and recursively (see below)
 	// compare objects recursively
-	const aArr = Array.isArray(a);
-	if (aArr || Array.isArray(b)) // if any of them is array
-	{	if (!aArr || !Array.isArray(b) || a.length!==b.length) // unless both are arrays of equal length
-		{	return false;
-		}
-		if (!aCircular || !bCircular)
-		{	for (let i=a.length; --i>=0;)
+	aCircular ||= pushParent(aParents, a);
+	bCircular ||= pushParent(bParents, b);
+	if (!aCircular || !bCircular)
+	{	const aArr = Array.isArray(a);
+		if (aArr || Array.isArray(b)) // if any of them is array
+		{	if (!aArr || !Array.isArray(b) || a.length!==b.length) // unless both are arrays of equal length
+			{	return false;
+			}
+			for (let i=a.length; --i>=0;)
 			{	const ai = a[i];
 				const bi = b[i];
 				if (!(ai===bi || (Number.isNaN(ai) && Number.isNaN(bi)) || (typeof(ai)=='object' && ai!==null && typeof(bi)=='object' && bi!==null && subequals(ai, bi, aCircular, bCircular, aParents, bParents))))
@@ -44,26 +46,23 @@ function subequals(a: object, b: object, aCircular: boolean, bCircular: boolean,
 				}
 			}
 		}
-		return true;
-	}
-	aCircular ||= pushParent(aParents, a);
-	bCircular ||= pushParent(bParents, b);
-	if (!aCircular || !bCircular)
-	{	const aKeys = getKeys(a);
-		const bKeys = getKeys(b);
-		// Check that a and b have same number of properties
-		if (aKeys.length != bKeys.length)
-		{	return false;
-		}
-		// Check that b has all properties of a, and they are equal
-		for (const p of aKeys)
-		{	if (!bKeys.includes(p))
+		else
+		{	const aKeys = getKeys(a);
+			const bKeys = getKeys(b);
+			// Check that a and b have same number of properties
+			if (aKeys.length != bKeys.length)
 			{	return false;
 			}
-			const ai = (a as Any)[p];
-			const bi = (b as Any)[p];
-			if (!(ai===bi || (Number.isNaN(ai) && Number.isNaN(bi)) || (typeof(ai)=='object' && ai!==null && typeof(bi)=='object' && bi!==null && subequals(ai, bi, aCircular, bCircular, aParents, bParents))))
-			{	return false;
+			// Check that b has all properties of a, and they are equal
+			for (const p of aKeys)
+			{	if (!bKeys.includes(p))
+				{	return false;
+				}
+				const ai = (a as Any)[p];
+				const bi = (b as Any)[p];
+				if (!(ai===bi || (Number.isNaN(ai) && Number.isNaN(bi)) || (typeof(ai)=='object' && ai!==null && typeof(bi)=='object' && bi!==null && subequals(ai, bi, aCircular, bCircular, aParents, bParents))))
+				{	return false;
+				}
 			}
 		}
 		// Remove a and b from parents
