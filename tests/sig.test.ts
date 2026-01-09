@@ -5150,3 +5150,28 @@ Deno.test
 		assertEquals(changes, ['sigA']);
 	}
 );
+
+Deno.test
+(	'Error signal value behavior',
+	() =>
+	{	const sigA = sig<number|undefined>(new Error('Initial error'));
+		const errorSig = sigA.error;
+
+		assertEquals(errorSig.value?.message, 'Initial error');
+
+		sigA.set(new Error('Updated error 1'));
+		assertEquals(errorSig.value?.message, 'Updated error 1');
+
+		let error: Error|undefined;
+		try
+		{	errorSig.set(new Error('Updated error 2'));
+		}
+		catch (e)
+		{	error = e instanceof Error ? e : new Error(e+'');
+		}
+		assertEquals(error?.message, 'Cannot set value of error signal');
+
+		sigA.set(42);
+		assertEquals(errorSig.value, undefined);
+	}
+);

@@ -41,16 +41,13 @@ const enum Flags
 	WantRecomp = 1,         // Value is stale and needs recomputation
 	RecompInProgress = 2,   // Currently computing a new value
 
-	// Signal type (bit 2):
-	IsErrorSignal = 4,	    // Signal treats Error as a value (for sig.error)
+	FlagsLowMask = 3,       // Mask for bits 0-1
 
-	FlagsLowMask = 7,       // Mask for bits 0-2
+	// onChange listener cache (bit 2):
+	HasOnChangePositive = 4, // Signal has onChange listeners (direct or transitive)
 
-	// onChange listener cache (bit 3):
-	HasOnChangePositive = 8, // Signal has onChange listeners (direct or transitive)
-
-	FlagsMask = 15,         // Mask for all flag bits (0-3)
-	OnChangeVersionStep = 16, // Step size for incrementing global onChange version (bit 4+)
+	FlagsMask = 7,         // Mask for all flag bits (0-2)
+	OnChangeVersionStep = 8, // Step size for incrementing global onChange version (bit 3+)
 }
 
 /**	The currently evaluating signal, used to track dependencies during computation.
@@ -528,7 +525,7 @@ export class Sig<T>
 	 **/
 	get error(): Sig<Error|undefined>
 	{	if (!this.#errorSig)
-		{	const valueHolder = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
+		{	const valueHolder = new ValueHolderErrorSig(Flags.WantRecomp, undefined, undefined, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
 			this.#errorSig = new Sig(valueHolder);
 		}
 		return this.#errorSig;
@@ -997,6 +994,23 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		return this.value;
 	}
 
+	/**	Returns the Error object if this signal is in error state.
+	 **/
+	override getErrorValue(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
+		recomp(ownerSig as Any);
+		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
+	}
+
+	/**	Returns the active promise if this signal is in promise state.
+		Used by Sig.promise getter to access the promise without triggering recomputation.
+	 **/
+	override getPromise(ownerSig: Sig<T>)
+	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
+		recomp(ownerSig as Any);
+		return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
+	}
+
 	/**	Sets a new value for the signal.
 
 		@param ownerSig Signal to update
@@ -1097,22 +1111,23 @@ class ValueHolderComp<T> extends ValueHolderPromise<T>
 		ownerSig[_valueHolder] = newValueHolder;
 		return valueHolderAdoptTOrError(ownerSig, compValue);
 	}
+}
 
-	/**	Returns the Error object if this signal is in error state.
-	 **/
-	override getErrorValue(ownerSig: Sig<T>)
-	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Error);
-		recomp(ownerSig as Any);
-		return this.promiseOrError instanceof Error ? this.promiseOrError : undefined;
+class ValueHolderErrorSig extends ValueHolderComp<Error|undefined>
+{	override getErrorValue()
+	{	return undefined;
 	}
 
-	/**	Returns the active promise if this signal is in promise state.
-		Used by Sig.promise getter to access the promise without triggering recomputation.
-	 **/
-	override getPromise(ownerSig: Sig<T>)
-	{	addMyselfAsDepToBeingComputed(ownerSig, CompType.Promise);
-		recomp(ownerSig as Any);
-		return this.promiseOrError instanceof Promise ? this.promiseOrError : undefined;
+	override getPromise()
+	{	return undefined;
+	}
+
+	override set(): CompType
+	{	throw new Error('Cannot set value of error signal');
+	}
+
+	override adopt(): CompType
+	{	throw new Error('Cannot set value of error signal');
 	}
 }
 
@@ -1158,7 +1173,7 @@ function valueHolderAdoptTOrError<T>(ownerSig: Sig<T>, newValue: T|Error, knownT
 {	const vh = ownerSig[_valueHolder] as ValueHolderPromise<T>;
 	const prevError = vh.promiseOrError instanceof Error ? vh.promiseOrError : undefined;
 	const prevValue = vh.value;
-	let newError = !(vh.flagsAndOnchangeVersion & Flags.IsErrorSignal) && newValue instanceof Error ? newValue : undefined;
+	let newError = newValue instanceof Error && !(vh instanceof ValueHolderErrorSig) ? newValue : undefined;
 	if (bySetter && !newError && vh instanceof ValueHolderComp && vh.setValue)
 	{	// Try to apply the setter function, catching any errors it throws
 		batchLevel++;
