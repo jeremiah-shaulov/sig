@@ -4589,6 +4589,294 @@ Deno.test
 	}
 );
 
+Deno.test
+(	'deepEquals - Set with non-object primitive values',
+	() =>
+	{	const sigA = sig(new Set([1, 2, 3]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Same Set should not trigger change
+		sigA.set(new Set([1, 2, 3]));
+		assertEquals(changes, []);
+
+		// Different Set should trigger change
+		sigA.set(new Set([1, 2, 4]));
+		assertEquals(changes, ['sigA']);
+		changes.length = 0;
+
+		// Set missing an element
+		sigA.set(new Set([1, 2]));
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Set with object values',
+	() =>
+	{	const obj1 = {a: 1};
+		const obj2 = {a: 1};
+		const obj3 = {a: 2};
+
+		const sigA = sig(new Set([obj1]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Equivalent object should not trigger change
+		sigA.set(new Set([obj2]));
+		assertEquals(changes, []);
+
+		// Different object should trigger change
+		sigA.set(new Set([obj3]));
+		assertEquals(changes, ['sigA']);
+		changes.length = 0;
+
+		// Set with multiple objects
+		const sigB = sig(new Set([{x: 1}, {y: 2}]));
+		sigB.subscribe(() => changes.push('sigB'));
+		changes.length = 0;
+
+		sigB.set(new Set([{x: 1}, {y: 2}]));
+		assertEquals(changes, []);
+
+		sigB.set(new Set([{x: 1}, {y: 3}]));
+		assertEquals(changes, ['sigB']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Set size mismatch',
+	() =>
+	{	const sigA = sig(new Set([1, 2, 3]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Different size should trigger change
+		sigA.set(new Set([1, 2]));
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Map with primitive keys',
+	() =>
+	{	const sigA = sig(new Map([['a', 1], ['b', 2]]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Same Map should not trigger change
+		sigA.set(new Map([['a', 1], ['b', 2]]));
+		assertEquals(changes, []);
+
+		// Different value should trigger change
+		sigA.set(new Map([['a', 1], ['b', 3]]));
+		assertEquals(changes, ['sigA']);
+		changes.length = 0;
+
+		// Missing key should trigger change
+		sigA.set(new Map([['a', 1]]));
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Map with undefined values',
+	() =>
+	{	const sigA = sig(new Map([['a', undefined], ['b', 2]]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Same Map with undefined should not trigger change
+		sigA.set(new Map([['a', undefined], ['b', 2]]));
+		assertEquals(changes, []);
+
+		// Key not in Map should trigger change
+		sigA.set(new Map([['b', 2]]));
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Map with object keys',
+	() =>
+	{	const key1 = {id: 1};
+		const key2 = {id: 1}; // Structurally equal to key1
+		const key3 = {id: 2};
+
+		const sigA = sig(new Map([[key1, 'value1']]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Structurally equal key should not trigger change
+		sigA.set(new Map([[key2, 'value1']]));
+		assertEquals(changes, []);
+
+		// Different key should trigger change
+		sigA.set(new Map([[key3, 'value1']]));
+		assertEquals(changes, ['sigA']);
+		changes.length = 0;
+
+		// Different value with same key should trigger change
+		sigA.set(new Map([[key1, 'value2']]));
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Map with object keys and values',
+	() =>
+	{	const key1 = {id: 1};
+		const key2 = {id: 1};
+		const val1 = {data: 'a'};
+		const val2 = {data: 'a'};
+		const val3 = {data: 'b'};
+
+		const sigA = sig(new Map([[key1, val1]]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Structurally equal key and value should not trigger change
+		sigA.set(new Map([[key2, val2]]));
+		assertEquals(changes, []);
+
+		// Different value should trigger change
+		sigA.set(new Map([[key2, val3]]));
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Map with NaN values',
+	() =>
+	{	const sigA = sig(new Map([['a', NaN], ['b', 2]]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Same Map with NaN should not trigger change (NaN equals NaN)
+		sigA.set(new Map([['a', NaN], ['b', 2]]));
+		assertEquals(changes, []);
+
+		// Different value (not NaN) should trigger change
+		sigA.set(new Map([['a', 42], ['b', 2]]));
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Map size mismatch',
+	() =>
+	{	const sigA = sig(new Map([['a', 1], ['b', 2]]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Different size should trigger change
+		sigA.set(new Map([['a', 1]]));
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Array with NaN values',
+	() =>
+	{	const sigA = sig([NaN, 1, 2]);
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Same array with NaN should not trigger change
+		sigA.set([NaN, 1, 2]);
+		assertEquals(changes, []);
+
+		// Different value should trigger change
+		sigA.set([42, 1, 2]);
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Mixed array and non-array comparison',
+	() =>
+	{	const sigA = sig([1, 2, 3]);
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Setting to non-array should trigger change
+		sigA.set({0: 1, 1: 2, 2: 3, length: 3} as Any);
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Different length arrays',
+	() =>
+	{	const sigA = sig([1, 2, 3]);
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Different length should trigger change
+		sigA.set([1, 2]);
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Set vs non-Set comparison',
+	() =>
+	{	const sigA = sig(new Set([1, 2, 3]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Setting to non-Set should trigger change
+		sigA.set([1, 2, 3] as Any);
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Map vs non-Map comparison',
+	() =>
+	{	const sigA = sig(new Map([['a', 1], ['b', 2]]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Setting to non-Map should trigger change
+		sigA.set({a: 1, b: 2} as Any);
+		assertEquals(changes, ['sigA']);
+	}
+);
+
+Deno.test
+(	'deepEquals - Objects with different property counts',
+	() =>
+	{	const sigA = sig<Any>({a: 1, b: 2});
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Different property count should trigger change
+		sigA.set({a: 1});
+		assertEquals(changes, ['sigA']);
+		changes.length = 0;
+
+		// Different properties should trigger change
+		sigA.set({a: 1, c: 2});
+		assertEquals(changes, ['sigA']);
+	}
+);
+
 // Additional edge case tests
 
 Deno.test
@@ -4749,5 +5037,116 @@ Deno.test
 		name2.set('Bob');
 		assertEquals(user.value?.name, 'Bob');
 		assertEquals(name1.value, 'Bob');
+	}
+);
+
+Deno.test
+(	'Error in onChange callback should be caught and logged',
+	() =>
+	{	const sigA = sig(0);
+		const errors = new Array<string>;
+		const originalError = console.error;
+		console.error = (msg: string, e: unknown) =>
+		{	errors.push(`${msg}: ${e}`);
+		};
+
+		try
+		{	sigA.subscribe
+			(	() =>
+				{	throw new Error('Test error in onChange');
+				}
+			);
+
+			sigA.set(1);
+			assertEquals(errors.length, 1);
+			assertEquals(errors[0].includes('Error in signal onChange callback'), true);
+			assertEquals(errors[0].includes('Test error in onChange'), true);
+		}
+		finally
+		{	console.error = originalError;
+		}
+	}
+);
+
+Deno.test
+(	'Proxy has trap - checking property existence',
+	() =>
+	{	const sigA = sig({a: 1, b: 2});
+		const thisSig = sigA.this;
+
+		// Properties that exist on Sig but not on Function
+		assertEquals('value' in thisSig, true);
+		assertEquals('set' in thisSig, true);
+		assertEquals('subscribe' in thisSig, true);
+	}
+);
+
+Deno.test
+(	'Proxy set trap - setting non-value property should throw',
+	() =>
+	{	const sigA = sig({a: 1, b: 2});
+		const thisSig = sigA.this as Any;
+
+		// Trying to set a non-value property should throw
+		try
+		{	thisSig.subscribe = () => {};
+			throw new Error('Should have thrown');
+		}
+		catch (e)
+		{	assertEquals((e as Error).message, 'Cannot set this property');
+		}
+	}
+);
+
+Deno.test
+(	'Proxy set trap - setting value property should work',
+	() =>
+	{	const sigA = sig<Any>({a: 1, b: 2});
+		const thisSig = sigA.this as Any;
+
+		// Setting value property should work
+		thisSig.value = {a: 3, b: 4};
+		assertEquals(sigA.value.a, 3);
+		assertEquals(sigA.value.b, 4);
+	}
+);
+
+Deno.test
+(	'Default value inference for different types',
+	() =>
+	{	// Boolean
+		const sigBool = sig(() => true);
+		assertEquals(sigBool.value, true);
+
+		// Number
+		const sigNum = sig(() => 42);
+		assertEquals(sigNum.value, 42);
+
+		// BigInt
+		const sigBigInt = sig(() => 123n);
+		assertEquals(sigBigInt.value, 123n);
+
+		// String
+		const sigStr = sig(() => 'hello');
+		assertEquals(sigStr.value, 'hello');
+	}
+);
+
+Deno.test
+(	'Map with object key and NaN value comparison',
+	() =>
+	{	const key = {id: 1};
+		const sigA = sig(new Map([[key, NaN]]));
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Same Map with object key and NaN value should not trigger change
+		sigA.set(new Map([[{id: 1}, NaN]]));
+		assertEquals(changes, []);
+
+		// Different value should trigger change
+		sigA.set(new Map([[{id: 1}, 42]]));
+		assertEquals(changes, ['sigA']);
 	}
 );
