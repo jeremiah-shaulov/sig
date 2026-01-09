@@ -1544,8 +1544,10 @@ export function sig<T>(compValue?: ValueOrPromise<T>|CompValue<T>, defaultValue?
 		return new Sig(valueHolder);
 	}
 	if (compValue instanceof Promise)
-	{	const valueHolder = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, convPromise(compValue), cancelComp);
-		return new Sig(valueHolder);
+	{	const valueHolder = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, undefined, cancelComp);
+		const s = new Sig(valueHolder);
+		valueHolderAdoptPromise(s, convPromise(compValue));
+		return s;
 	}
 	if (compValue instanceof Error)
 	{	const valueHolder = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, compValue, cancelComp);

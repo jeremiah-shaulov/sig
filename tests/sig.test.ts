@@ -11,6 +11,9 @@ Deno.test
 		const infoEnabled: Sig<string|undefined> = info.this.enabled;
 		assertEquals(infoEnabled.value, 'yes');
 
+		const asyncSig: Sig<number> = sig(Promise.resolve(42), 0);
+		assertEquals(asyncSig.value, 0);
+
 		const user = sig({name: 'John', age: 30}, {name: 'Jane'});
 		const name: Sig<string> = user.this.name;
 		const age: Sig<number|undefined> = user.this.age;
@@ -57,6 +60,22 @@ Deno.test
 		const noLetter = recSig.this.missing.convert(p => p?.charAt(0));
 		assertEquals(letter.value, 'H');
 		assertEquals(noLetter.value, undefined);
+	}
+);
+
+Deno.test
+(	'Promise signal',
+	async () =>
+	{	const asyncSig: Sig<number> = sig(Promise.resolve(42), 0);
+		assertEquals(asyncSig.value, 0);
+		await new Promise(y => setTimeout(y, 0));
+		assertEquals(asyncSig.value, 42);
+
+		const asyncSig2: Sig<number> = sig(Promise.reject(42), 0);
+		assertEquals(asyncSig2.value, 0);
+		await new Promise(y => setTimeout(y, 0));
+		assertEquals(asyncSig2.value, 0);
+		assertEquals(asyncSig2.error.value?.message, '42');
 	}
 );
 
