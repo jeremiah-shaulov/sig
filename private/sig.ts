@@ -528,7 +528,7 @@ export class Sig<T>
 	 **/
 	get error(): Sig<Error|undefined>
 	{	if (!this.#errorSig)
-		{	const valueHolder: ValueHolder<Error|undefined> = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
+		{	const valueHolder = new ValueHolderComp<Error|undefined>(Flags.WantRecomp|Flags.IsErrorSignal, undefined, undefined, undefined, undefined, () => this[_valueHolder].getErrorValue(this));
 			this.#errorSig = new Sig(valueHolder);
 		}
 		return this.#errorSig;
@@ -539,7 +539,7 @@ export class Sig<T>
 	 **/
 	get busy(): Sig<boolean>
 	{	if (!this.#busySig)
-		{	const valueHolder: ValueHolder<boolean> = new ValueHolderComp(Flags.WantRecomp, false, false, undefined, undefined, () => !!this.promise);
+		{	const valueHolder = new ValueHolderComp(Flags.WantRecomp, false, false, undefined, undefined, () => !!this.promise);
 			this.#busySig = new Sig(valueHolder);
 		}
 		return this.#busySig;
@@ -1540,15 +1540,15 @@ export function sig<T>(...args: undefined extends T ? [Error?] : never): Sig<T>;
 
 export function sig<T>(compValue?: ValueOrPromise<T>|CompValue<T>, defaultValue?: T, setValue?: SetValue<T>, cancelComp?: CancelComp<T>): Sig<T>
 {	if (typeof(compValue)=='function' || compValue instanceof Sig)
-	{	const valueHolder: ValueHolder<T> = new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, cancelComp, compValue as CompValue<T>, setValue);
+	{	const valueHolder = new ValueHolderComp<T>(Flags.WantRecomp, defaultValue!, defaultValue!, undefined, cancelComp, compValue as CompValue<T>, setValue);
 		return new Sig(valueHolder);
 	}
 	if (compValue instanceof Promise)
-	{	const valueHolder: ValueHolder<T> = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, convPromise(compValue), cancelComp);
+	{	const valueHolder = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, convPromise(compValue), cancelComp);
 		return new Sig(valueHolder);
 	}
 	if (compValue instanceof Error)
-	{	const valueHolder: ValueHolder<T> = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, compValue, cancelComp);
+	{	const valueHolder = new ValueHolderPromise<T>(Flags.Value, defaultValue!, defaultValue!, compValue, cancelComp);
 		return new Sig(valueHolder);
 	}
 	return new Sig
