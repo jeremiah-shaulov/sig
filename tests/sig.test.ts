@@ -14,6 +14,10 @@ Deno.test
 		const asyncSig: Sig<number> = sig(Promise.resolve(42), 0);
 		assertEquals(asyncSig.value, 0);
 
+		// deno-lint-ignore require-await
+		const asyncCalcSig: Sig<{value: number} | undefined> = sig(async () => ({value: 42}));
+		assertEquals(asyncCalcSig.value, undefined);
+
 		const user = sig({name: 'John', age: 30}, {name: 'Jane'});
 		const name: Sig<string> = user.this.name;
 		const age: Sig<number|undefined> = user.this.age;

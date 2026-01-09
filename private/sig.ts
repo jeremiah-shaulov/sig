@@ -1471,6 +1471,8 @@ function sigConvert<T, R>(ownerSig: Sig<T>, compValue: (value: T) => ValueOrProm
 	@param setValue Optional setter invoked when setting static values. Prevents replacing the computation function.
 	@param cancelComp Optional callback to cancel ongoing async computations when replaced.
  **/
+export function sig<V, D=V>(compValue: (sync: () => void, cause?: Sig<unknown>) => Promise<V>, defaultValue: D, setValue?: SetValue<V|D>, cancelComp?: CancelComp<V|D>): Sig<D extends V ? V : V|D>;
+export function sig<V>(compValue: (sync: () => void, cause?: Sig<unknown>) => Promise<V>): Sig<V|undefined>;
 export function sig<V, D=V>(compValue: CompValue<V>, defaultValue: D, setValue?: SetValue<V|D>, cancelComp?: CancelComp<V|D>): Sig<D extends V ? V : V|D>;
 /**	Overload for when no default value is provided.
  **/
