@@ -482,6 +482,29 @@
 	values actually change. The implementation uses deep equality checking to prevent
 	unnecessary updates when the new value is deeply equal to the previous value.
 
+	The following example demonstrates this behavior:
+
+	```ts
+	const obj = sig({a: -1});
+	const data = sig
+	(	() =>
+		{	console.log('obj changed:', obj.value);
+			return obj.value?.a;
+		}
+	);
+
+	for (let i = 0; i < 3; i++)
+	{	obj.value = {a: 0};
+		console.log(data.value);
+	}
+
+	// Prints `obj changed: { a: 0 }` only once
+	```
+
+	The dependent signal (`data`) recomputes only once, even though `obj.value` is assigned 3 times.
+	If it's computation function would perform a heavy operation or a data fetch from a server,
+	it would be executed only once.
+
 	## Property and Method Signals
 
 	The `.this` proxy automatically converts object properties and methods into reactive signals:
