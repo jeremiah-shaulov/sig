@@ -46,6 +46,55 @@ function subequals(a: object, b: object, aCircular: boolean, bCircular: boolean,
 				}
 			}
 		}
+		else if (a instanceof Set)
+		{	if (!(b instanceof Set) || a.size!==b.size)
+			{	return false;
+			}
+L:			for (const ai of a)
+			{	// Sets compare by value, so need to find matching value in b
+				if (typeof(ai)!='object' || ai===null)
+				{	if (!b.has(ai))
+					{	return false;
+					}
+				}
+				else
+				{	for (const bi of b)
+					{	if (ai===bi || (typeof(bi)=='object' && bi!==null && subequals(ai, bi, aCircular, bCircular, aParents, bParents)))
+						{	continue L;
+						}
+					}
+					return false;
+				}
+			}
+		}
+		else if (a instanceof Map)
+		{	if (!(b instanceof Map) || a.size!==b.size)
+			{	return false;
+			}
+M:			for (const [aKey, aValue] of a)
+			{	// Maps compare by key and value, so need to find matching key in b
+				if (typeof(aKey)!='object' || aKey===null)
+				{	const bValue = b.get(aKey);
+					if (bValue===undefined && !b.has(aKey))
+					{	return false;
+					}
+					if (!(aValue===bValue || (Number.isNaN(aValue) && Number.isNaN(bValue)) || (typeof(aValue)=='object' && aValue!==null && typeof(bValue)=='object' && bValue!==null && subequals(aValue, bValue, aCircular, bCircular, aParents, bParents))))
+					{	return false;
+					}
+				}
+				else
+				{	for (const [bKey, bValue] of b)
+					{	if (aKey===bKey || (typeof(bKey)=='object' && bKey!==null && subequals(aKey, bKey, aCircular, bCircular, aParents, bParents)))
+						{	if (!(aValue===bValue || (Number.isNaN(aValue) && Number.isNaN(bValue)) || (typeof(aValue)=='object' && aValue!==null && typeof(bValue)=='object' && bValue!==null && subequals(aValue, bValue, aCircular, bCircular, aParents, bParents))))
+							{	return false;
+							}
+							continue M;
+						}
+					}
+					return false;
+				}
+			}
+		}
 		else
 		{	const aKeys = getKeys(a);
 			const bKeys = getKeys(b);
