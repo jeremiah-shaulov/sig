@@ -10,7 +10,7 @@ type Any = any;
 	@returns `true` if the values are deeply equal, `false` otherwise
  **/
 export function deepEquals(a: unknown, b: unknown)
-{	return subequals(a, b, false, false, [], []);
+{	return a===b || (Number.isNaN(a) && Number.isNaN(b)) || (typeof(a)=='object' && a!==null && typeof(b)=='object' && b!==null && subequals(a, b, false, false, [], []));
 }
 
 /**	Recursively compares two values for deep equality.
@@ -25,55 +25,56 @@ export function deepEquals(a: unknown, b: unknown)
 	@param bParents Stack of parent objects for 'b' (for circular detection)
 	@returns true if values are deeply equal, false otherwise
  **/
-function subequals(a: unknown, b: unknown, aCircular: boolean, bCircular: boolean, aParents: unknown[], bParents: unknown[])
-{	if (a===b || Number.isNaN(a) && Number.isNaN(b))
-	{	return true;
-	}
-	// compare functions by reference only (already compared above)
+function subequals(a: object, b: object, aCircular: boolean, bCircular: boolean, aParents: unknown[], bParents: unknown[])
+{	// compare functions by reference only (already compared above)
 	// compare nonobjects in regular way (already compared above)
 	// compare objects by reference (already compared above), and recursively (see below)
-	if (typeof(a)=='object' && a!=null && typeof(b)=='object' && b!=null)
-	{	// compare objects recursively
-		const aArr = Array.isArray(a);
-		if (aArr || Array.isArray(b)) // if any of them is array
-		{	if (!aArr || !Array.isArray(b) || a.length!==b.length) // unless both are arrays of equal length
-			{	return false;
-			}
-			if (!aCircular || !bCircular)
-			{	for (let i=a.length; --i>=0;)
-				{	if (!subequals(a[i], b[i], aCircular, bCircular, aParents, bParents))
-					{	return false;
-					}
-				}
-			}
-			return true;
+	// compare objects recursively
+	const aArr = Array.isArray(a);
+	if (aArr || Array.isArray(b)) // if any of them is array
+	{	if (!aArr || !Array.isArray(b) || a.length!==b.length) // unless both are arrays of equal length
+		{	return false;
 		}
-		aCircular ||= pushParent(aParents, a);
-		bCircular ||= pushParent(bParents, b);
 		if (!aCircular || !bCircular)
-		{	const aKeys = getKeys(a);
-			const bKeys = getKeys(b);
-			// Check that a and b have same number of properties
-			if (aKeys.length != bKeys.length)
-			{	return false;
-			}
-			// Check that b has all properties of a, and they are equal
-			for (const p of aKeys)
-			{	if (!bKeys.includes(p) || !subequals((a as Any)[p], (b as Any)[p], aCircular, bCircular, aParents, bParents))
+		{	for (let i=a.length; --i>=0;)
+			{	const ai = a[i];
+				const bi = b[i];
+				if (!(ai===bi || (Number.isNaN(ai) && Number.isNaN(bi)) || (typeof(ai)=='object' && ai!==null && typeof(bi)=='object' && bi!==null && subequals(ai, bi, aCircular, bCircular, aParents, bParents))))
 				{	return false;
 				}
-			}
-			// Remove a and b from parents
-			if (!aCircular)
-			{	aParents.length--;
-			}
-			if (!bCircular)
-			{	bParents.length--;
 			}
 		}
 		return true;
 	}
-	return false;
+	aCircular ||= pushParent(aParents, a);
+	bCircular ||= pushParent(bParents, b);
+	if (!aCircular || !bCircular)
+	{	const aKeys = getKeys(a);
+		const bKeys = getKeys(b);
+		// Check that a and b have same number of properties
+		if (aKeys.length != bKeys.length)
+		{	return false;
+		}
+		// Check that b has all properties of a, and they are equal
+		for (const p of aKeys)
+		{	if (!bKeys.includes(p))
+			{	return false;
+			}
+			const ai = (a as Any)[p];
+			const bi = (b as Any)[p];
+			if (!(ai===bi || (Number.isNaN(ai) && Number.isNaN(bi)) || (typeof(ai)=='object' && ai!==null && typeof(bi)=='object' && bi!==null && subequals(ai, bi, aCircular, bCircular, aParents, bParents))))
+			{	return false;
+			}
+		}
+		// Remove a and b from parents
+		if (!aCircular)
+		{	aParents.length--;
+		}
+		if (!bCircular)
+		{	bParents.length--;
+		}
+	}
+	return true;
 }
 
 /**	Adds an object to the parent stack and checks for circular references.
