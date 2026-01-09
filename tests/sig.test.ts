@@ -1,4 +1,5 @@
 import {sig, Sig, batch} from '../mod.ts';
+import {deepEquals} from '../private/deep_equals.ts';
 import {assertEquals} from './deps.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -4236,5 +4237,517 @@ Deno.test
 		// so we should see all intermediate values
 		assertEquals(changes.length >= 1, true);
 		assertEquals(sigA.value, 5);
+	}
+);
+
+// Tests for toJSON() method
+
+Deno.test
+(	'toJSON() returns current value',
+	() =>
+	{	const sigA = sig(42);
+		assertEquals(sigA.toJSON(), 42);
+
+		const sigB = sig('hello');
+		assertEquals(sigB.toJSON(), 'hello');
+
+		const sigC = sig({name: 'John', age: 30});
+		assertEquals(sigC.toJSON(), {name: 'John', age: 30});
+
+		const sigD = sig([1, 2, 3]);
+		assertEquals(sigD.toJSON(), [1, 2, 3]);
+	}
+);
+
+Deno.test
+(	'toJSON() with JSON.stringify()',
+	() =>
+	{	const sigA = sig(42);
+		assertEquals(JSON.stringify(sigA), '42');
+
+		const sigB = sig('hello');
+		assertEquals(JSON.stringify(sigB), '"hello"');
+
+		const sigC = sig({name: 'John', age: 30});
+		assertEquals(JSON.stringify(sigC), '{"name":"John","age":30}');
+
+		// Test with object containing signals
+		const sigD = sig({count: 10});
+		const obj =
+		{	signal: sigD,
+			regular: 'value'
+		};
+		const json = JSON.stringify(obj);
+		assertEquals(json, '{"signal":{"count":10},"regular":"value"}');
+	}
+);
+
+Deno.test
+(	'toJSON() with error signal',
+	() =>
+	{	const sigA = sig<number>(new Error('Test error'), 999);
+		assertEquals(sigA.toJSON(), 999); // Returns default value
+	}
+);
+
+Deno.test
+(	'toJSON() with promise signal',
+	() =>
+	{	const sigA = sig(() => Promise.resolve(42), 0);
+		assertEquals(sigA.toJSON(), 0); // Returns default value while promise pending
+	}
+);
+
+Deno.test
+(	'toJSON() with computed signal',
+	() =>
+	{	const sigA = sig(5, undefined);
+		const sigB = sig(() => sigA.value! * 2);
+		assertEquals(sigB.toJSON(), 10);
+
+		sigA.set(10);
+		assertEquals(sigB.toJSON(), 20);
+	}
+);
+
+// Tests for deepEquals edge cases
+
+Deno.test
+(	'deepEquals - circular references in arrays',
+	() =>
+	{	const sigA = sig<Any>([1, 2]);
+		const sigB = sig<Any>([1, 2]);
+
+		// Create circular reference in both
+		sigA.value.push(sigA.value);
+		sigB.value.push(sigB.value);
+
+		// Change to new values (should trigger onChange if deepEquals handles circular correctly)
+		const changes = new Array<string>;
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Setting same structure should not trigger change
+		const newArr1: Any[] = [1, 2];
+		newArr1.push(newArr1);
+		sigA.set(newArr1);
+		assertEquals(changes, []); // No change due to circular structure equality
+	}
+);
+
+Deno.test
+(	'deepEquals - circular references in objects',
+	() =>
+	{	const sigA = sig<Any>({a: 1, b: 2});
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Create circular reference
+		sigA.value.self = sigA.value;
+
+		// Setting same structure should not trigger change
+		const newObj: Any = {a: 1, b: 2};
+		newObj.self = newObj;
+		sigA.set(newObj);
+		assertEquals(changes, []); // No change due to circular structure equality
+	}
+);
+
+Deno.test
+(	'deepEquals - NaN comparisons',
+	() =>
+	{	const sigA = sig(NaN);
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Setting NaN again should not trigger change (NaN === NaN in deepEquals)
+		sigA.set(NaN);
+		assertEquals(changes, []);
+
+		// Setting different value should trigger change
+		sigA.set(42);
+		assertEquals(changes, ['sigA']);
+		changes.length = 0;
+
+		// Test NaN in arrays
+		const sigB = sig([NaN, 1, 2]);
+		sigB.subscribe(() => changes.push('sigB'));
+		changes.length = 0;
+
+		sigB.set([NaN, 1, 2]);
+		assertEquals(changes, []); // No change, NaN equals NaN
+
+		sigB.set([NaN, 1, 3]);
+		assertEquals(changes, ['sigB']); // Change in last element
+		changes.length = 0;
+
+		// Test NaN in objects
+		const sigC = sig({value: NaN});
+		sigC.subscribe(() => changes.push('sigC'));
+		changes.length = 0;
+
+		sigC.set({value: NaN});
+		assertEquals(changes, []); // No change
+	}
+);
+
+Deno.test
+(	'deepEquals - objects with getter properties',
+	() =>
+	{	class TestClass
+		{	_value = 10;
+
+			get value()
+			{	return this._value;
+			}
+
+			set value(v: number)
+			{	this._value = v;
+			}
+
+			normalProp = 20;
+		}
+
+		const obj1 = new TestClass;
+		const obj2 = new TestClass;
+
+		const sigA = sig(obj1);
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Verify they're actually equal according to deepEquals
+		assertEquals(deepEquals(obj1, obj2), true);
+
+		sigA.set(obj2);
+		assertEquals(changes, []); // No change, values are equal
+
+		// Change the getter value and create a new object
+		const obj3 = new TestClass();
+		obj3.value = 15;
+		changes.length = 0; // Clear changes array
+		sigA.set(obj3);
+		assertEquals(changes, ['sigA']); // Should detect change
+	}
+);
+
+Deno.test
+(	'deepEquals - nested arrays and objects',
+	() =>
+	{	const sigA = sig
+		(	{	arr: [1, 2, {nested: [3, 4]}],
+				obj: {a: 1, b: {c: 2}},
+			}
+		);
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Setting same structure
+		sigA.set
+		(	{	arr: [1, 2, {nested: [3, 4]}],
+				obj: {a: 1, b: {c: 2}},
+			}
+		);
+		assertEquals(changes, []); // No change
+
+		// Change deeply nested value
+		sigA.set
+		(	{	arr: [1, 2, {nested: [3, 5]}], // 4 -> 5
+				obj: {a: 1, b: {c: 2}},
+			}
+		);
+		assertEquals(changes, ['sigA']); // Change detected
+	}
+);
+
+Deno.test
+(	'deepEquals - different object types',
+	() =>
+	{	const sigA = sig<Any>({a: 1});
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Array vs object
+		sigA.set([1, 2]);
+		assertEquals(changes, ['sigA']);
+		changes.length = 0;
+
+		// Object vs array
+		sigA.set({a: 1});
+		assertEquals(changes, ['sigA']);
+		changes.length = 0;
+
+		// Date objects
+		const date1 = new Date('2024-01-01');
+		const date2 = new Date('2024-01-01');
+		sigA.set(date1);
+		changes.length = 0;
+		sigA.set(date2);
+		// Dates are objects, compared by properties (time value)
+		assertEquals(changes, []); // Same time value
+	}
+);
+
+Deno.test
+(	'deepEquals - Map and Set objects',
+	() =>
+	{	const sigA = sig<Any>(new Map([['a', 1], ['b', 2]]));
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		// Same map content
+		sigA.set(new Map([['a', 1], ['b', 2]]));
+		assertEquals(changes, []); // No change, same entries
+
+		// Different map content
+		sigA.set(new Map([['a', 1], ['b', 3]]));
+		assertEquals(changes, ['sigA']); // Change detected
+		changes.length = 0;
+
+		// Test with Set
+		const sigB = sig<Any>(new Set([1, 2, 3]));
+		sigB.subscribe(() => changes.push('sigB'));
+		changes.length = 0;
+
+		sigB.set(new Set([1, 2, 3]));
+		assertEquals(changes, []); // No change, same entries
+
+		sigB.set(new Set([1, 2, 4]));
+		assertEquals(changes, ['sigB']); // Change detected
+		changes.length = 0;
+	}
+);
+
+Deno.test
+(	'deepEquals - arrays of different lengths',
+	() =>
+	{	const sigA = sig([1, 2, 3]);
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		sigA.set([1, 2, 3, 4]);
+		assertEquals(changes, ['sigA']); // Different length
+		changes.length = 0;
+
+		sigA.set([1, 2]);
+		assertEquals(changes, ['sigA']); // Shorter array
+	}
+);
+
+Deno.test
+(	'deepEquals - objects with different property counts',
+	() =>
+	{	const sigA = sig<Any>({a: 1, b: 2});
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		sigA.set({a: 1, b: 2, c: 3});
+		assertEquals(changes, ['sigA']); // More properties
+		changes.length = 0;
+
+		sigA.set({a: 1});
+		assertEquals(changes, ['sigA']); // Fewer properties
+	}
+);
+
+Deno.test
+(	'deepEquals - null and undefined',
+	() =>
+	{	const sigA = sig<Any>(null);
+		const changes = new Array<string>;
+
+		sigA.subscribe(() => changes.push('sigA'));
+		changes.length = 0;
+
+		sigA.set(null);
+		assertEquals(changes, []); // Same null
+
+		sigA.set(undefined);
+		assertEquals(changes, ['sigA']); // null vs undefined
+		changes.length = 0;
+
+		sigA.set(undefined);
+		assertEquals(changes, []); // Same undefined
+
+		sigA.set(0);
+		assertEquals(changes, ['sigA']); // undefined vs 0
+	}
+);
+
+// Additional edge case tests
+
+Deno.test
+(	'Signal with undefined initial value',
+	() =>
+	{	const sigA = sig<string|undefined>(undefined, undefined);
+		assertEquals(sigA.value, undefined);
+		assertEquals(sigA.default, undefined);
+
+		const sigB = sig<string|undefined>();
+		assertEquals(sigB.value, undefined);
+		assertEquals(sigB.default, undefined);
+
+		sigA.set('hello');
+		assertEquals(sigA.value, 'hello');
+
+		sigB.set('world');
+		assertEquals(sigB.value, 'world');
+	}
+);
+
+Deno.test
+(	'Property signal on signal with undefined value',
+	() =>
+	{	const sigA = sig<{v: number}|undefined>();
+		const vSig = sigA.this.v;
+
+		assertEquals(vSig.value, undefined);
+
+		sigA.set({v: 42});
+		assertEquals(vSig.value, 42);
+
+		sigA.set(undefined);
+		assertEquals(vSig.value, undefined);
+	}
+);
+
+Deno.test
+(	'Method call on undefined value',
+	() =>
+	{	const sigA = sig<string[]>([]);
+		const sliceSig = sigA.this.slice(0, 2);
+
+		assertEquals(sliceSig.value, []);
+
+		sigA.set(['a', 'b', 'c']);
+		assertEquals(sliceSig.value, ['a', 'b']);
+
+		sigA.set(undefined);
+		assertEquals(sliceSig.value, undefined);
+	}
+);
+
+Deno.test
+(	'Resubscribing same callback',
+	() =>
+	{	const sigA = sig(10, undefined);
+		const changes = new Array<string>;
+
+		const callback = () => changes.push('callback');
+
+		sigA.subscribe(callback);
+		sigA.subscribe(callback); // Subscribe again - should not add duplicate
+
+		sigA.set(20);
+		// Callback should only be called once
+		assertEquals(changes.filter(c => c === 'callback').length, 1);
+	}
+);
+
+Deno.test
+(	'Symbol.toPrimitive with property signal',
+	() =>
+	{	const user = sig({name: 'John', age: 30});
+		const nameSig = user.this.name;
+
+		const str = `${nameSig}`;
+		assertEquals(str.includes('Sig'), true);
+		assertEquals(str.includes('=>'), true); // It's a computed signal
+	}
+);
+
+Deno.test
+(	'Error signal never enters promise state',
+	async () =>
+	{	const sigA = sig<number|undefined>(new Error('Initial error'));
+		const errorSig = sigA.error;
+
+		// error signal should never be in promise state
+		assertEquals(errorSig.promise, undefined);
+		assertEquals(errorSig.busy.value, false);
+
+		// Change to promise
+		let resolver: (value: number) => void;
+		const promise = new Promise<number>(y => resolver = y);
+		sigA.set(() => promise);
+
+		// error signal still should not be in promise state
+		assertEquals(errorSig.promise, undefined);
+		assertEquals(errorSig.busy.value, false);
+
+		resolver!(42);
+		await promise;
+		await new Promise(y => setTimeout(y, 0));
+
+		assertEquals(errorSig.promise, undefined);
+		assertEquals(errorSig.busy.value, false);
+	}
+);
+
+Deno.test
+(	'Converting static signal to computed and back',
+	() =>
+	{	const sigA = sig(10, undefined);
+		assertEquals(sigA.value, 10);
+
+		// Convert to computed
+		sigA.set(() => 20);
+		assertEquals(sigA.value, 20);
+
+		// Convert back to static
+		sigA.set(30);
+		assertEquals(sigA.value, 30);
+
+		// Convert to promise
+		sigA.set(Promise.resolve(40));
+		assertEquals(sigA.busy.value, true);
+	}
+);
+
+Deno.test
+(	'Multiple property accesses create same signal',
+	() =>
+	{	const user = sig({name: 'John', age: 30});
+
+		const name1 = user.this.name;
+		const name2 = user.this.name;
+
+		// Should be the same signal (cached)
+		assertEquals(name1, name2);
+
+		name1.set('Jane');
+		assertEquals(name2.value, 'Jane');
+	}
+);
+
+Deno.test
+(	'Setting property through different property signal instances',
+	() =>
+	{	const user = sig({name: 'John', age: 30});
+
+		const name1 = user.this.name;
+		const name2 = user.this.name;
+
+		name1.set('Jane');
+		assertEquals(user.value?.name, 'Jane');
+
+		name2.set('Bob');
+		assertEquals(user.value?.name, 'Bob');
+		assertEquals(name1.value, 'Bob');
 	}
 );
