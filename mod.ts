@@ -493,7 +493,7 @@
 		}
 	);
 
-	for (let i = 0; i < 3; i++)
+	for (let i=0; i<3; i++)
 	{	obj.value = {a: 0};
 		console.log(data.value);
 	}
