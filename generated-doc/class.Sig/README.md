@@ -3,7 +3,7 @@
 [Documentation Index](../README.md)
 
 ```ts
-import {Sig} from "jsr:@shaulov/sig@0.0.18"
+import {Sig} from "jsr:@shaulov/sig@0.0.19"
 ```
 
 Type returned by the [sig()](../function.sig/README.md) function.
@@ -238,14 +238,14 @@ For rejected Promises, no notification occurs.
 
 #### 📄 `get` mut(): MutSig\<T>
 
-> Provides access to mutable methods that trigger change notifications.
+> Provides access to mutating methods that trigger change notifications.
 > 
 > Normally, signals detect changes only through `set()` calls using deep equality.
 > Direct mutations don't trigger updates:
 > 
 > ```ts
 > const sigA = sig(['a', 'b', 'c']);
-> const sigS = sigA.slice(1);
+> const sigS = sigA.this.slice(1);
 > 
 > console.log(sigS.value); // ['b', 'c']
 > 
@@ -265,7 +265,7 @@ For rejected Promises, no notification occurs.
 > console.log(sigS.value); // ['b', 'c', 'd']
 > ```
 > 
-> If the called method returned a Promise, the notification is triggered after it resolves.
+> For async methods that return a Promise, the notification is triggered after the promise resolves.
 > For rejected Promises, no notification occurs.
 
 
@@ -322,8 +322,9 @@ For rejected Promises, no notification occurs.
 > Creates a new signal by applying a transformation function to this signal's value.
 > The conversion function receives the value and returns the transformed result.
 > Promises and errors propagate through the conversion:
-> - Promise state: Conversion applied after promise resolves
-> - Error state: Error propagates to the converted signal
+> - When in error state: The error propagates to the converted signal without calling the conversion function
+> - When in promise state: The conversion function is called after the promise resolves
+> - When in value state: The conversion function is called immediately
 > 
 > ```ts
 > const pathname = sig('/path/to/file.txt');

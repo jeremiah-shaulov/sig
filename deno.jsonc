@@ -1,5 +1,5 @@
 {	"name": "@shaulov/sig",
-	"version": "0.0.18",
+	"version": "0.0.19",
 	"license": "MIT",
 	"exports": "./mod.ts"
 }

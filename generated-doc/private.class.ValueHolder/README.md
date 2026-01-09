@@ -8,12 +8,11 @@ Subclasses extend this to handle promises and computed values.
 
 ## This class has
 
-- [constructor](#-constructorflagsandonchangeversion-flags-value-t-defaultvalue-t-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown)
-- 4 properties:
+- [constructor](#-constructorflagsandonchangeversion-flags-value-t-defaultvalue-t)
+- 3 properties:
 [flagsAndOnchangeVersion](#-flagsandonchangeversion-flags),
 [value](#-value-t),
-[defaultValue](#-defaultvalue-t),
-[onChangeCallbacks](#-onchangecallbacks-arrayonchangeunknown--weakrefonchangeunknown)
+[defaultValue](#-defaultvalue-t)
 - 5 methods:
 [get](#-getownersig-sigt-t),
 [getErrorValue](#-geterrorvalueownersig-sigt-error),
@@ -22,7 +21,7 @@ Subclasses extend this to handle promises and computed values.
 [adopt](#-adoptownersig-sigt-compvalue-valueorpromiset--compvaluet-cancelcomp-cancelcompt-comptype)
 
 
-#### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), value: T, defaultValue: T, onChangeCallbacks?: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>>)
+#### 🔧 `constructor`(flagsAndOnchangeVersion: [Flags](../private.enum.Flags/README.md), value: T, defaultValue: T)
 
 
 
@@ -35,12 +34,6 @@ Subclasses extend this to handle promises and computed values.
 
 
 #### 📄 defaultValue: T
-
-
-
-#### 📄 onChangeCallbacks?: Array\<[OnChange](../private.type.OnChange/README.md)\<`unknown`> | WeakRef\<[OnChange](../private.type.OnChange/README.md)\<`unknown`>>>
-
-> Callbacks to invoke when the signal's value changes.
 
 
 
@@ -86,8 +79,10 @@ Subclasses extend this to handle promises and computed values.
 
 #### ⚙ adopt(ownerSig: [Sig](../class.Sig/README.md)\<T>, compValue: [ValueOrPromise](../private.type.ValueOrPromise/README.md)\<T> | [CompValue](../private.type.CompValue/README.md)\<T>, cancelComp?: [CancelComp](../private.type.CancelComp/README.md)\<T>): [CompType](../private.enum.CompType/README.md)
 
-> Sets a new value for the signal, potentially converting the ValueHolder type.
-> Converts to ValueHolderComp for functions/signals, ValueHolderPromise for promises/errors.
+> Sets a new value for the signal, potentially upgrading the ValueHolder type.
+> Upgrades to ValueHolderComp when given a function or signal (to enable computation).
+> Upgrades to ValueHolderPromise when given a promise or error (to track promise/error state).
+> For plain values, sets the value directly without changing the ValueHolder type.
 > 
 > 🎚️ Parameter **ownerSig**:
 > 

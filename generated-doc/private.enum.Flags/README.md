@@ -29,23 +29,19 @@ Internal flags tracking signal state.
 
 
 
-#### IsErrorSignal = <mark>4</mark>
+#### FlagsLowMask = <mark>3</mark>
 
 
 
-#### FlagsLowMask = <mark>7</mark>
+#### HasOnChangePositive = <mark>4</mark>
 
 
 
-#### HasOnChangePositive = <mark>8</mark>
+#### FlagsMask = <mark>7</mark>
 
 
 
-#### FlagsMask = <mark>15</mark>
-
-
-
-#### OnChangeVersionStep = <mark>16</mark>
+#### OnChangeVersionStep = <mark>8</mark>
 
 
 
