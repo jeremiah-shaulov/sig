@@ -26,10 +26,9 @@ export function deepEquals(a: unknown, b: unknown)
 	@returns true if values are deeply equal, false otherwise
  **/
 function subequals(a: object, b: object, aCircular: boolean, bCircular: boolean, aParents: unknown[], bParents: unknown[])
-{	// compare functions by reference only (already compared above)
-	// compare nonobjects in regular way (already compared above)
-	// compare objects by reference (already compared above), and recursively (see below)
-	// compare objects recursively
+{	// Compare functions by reference only (already compared above)
+	// Compare nonobjects in regular way (already compared above)
+	// Compare objects by reference (already compared above), and recursively (see below)
 	aCircular ||= pushParent(aParents, a);
 	bCircular ||= pushParent(bParents, b);
 	if (!aCircular || !bCircular)
