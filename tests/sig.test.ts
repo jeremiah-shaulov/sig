@@ -84,6 +84,91 @@ Deno.test
 );
 
 Deno.test
+(	'Async calc signal',
+	async () =>
+	{	const calc = new Array<number>;
+		const changes = new Array<{error: string} | {busy: true} | {data: {value: number}|undefined}>;
+
+		const objId = sig(0);
+
+		const objData = sig
+		(	async () =>
+			{	calc.push(objId.value);
+				if (!objId.value)
+				{	throw new Error("Invalid object ID");
+				}
+				await new Promise(y => setTimeout(y, 0));
+				return {value: objId.value};
+			}
+		);
+
+		objData.subscribe
+		(	function()
+			{	if (this.error.value)
+				{	changes.push({error: this.error.value.message});
+				}
+				else if (this.busy.value)
+				{	changes.push({busy: true});
+				}
+				else
+				{	changes.push({data: this.value});
+				}
+			}
+		);
+
+		assertEquals(calc, [0]);
+		assertEquals(changes, [{busy: true}]);
+		calc.length = 0;
+		changes.length = 0;
+
+		await new Promise(y => setTimeout(y, 20));
+		assertEquals(calc, []);
+		assertEquals(changes, [{error: "Invalid object ID"}]);
+		calc.length = 0;
+		changes.length = 0;
+
+		objId.value = 10;
+
+		assertEquals(calc, [10]);
+		assertEquals(changes, [{busy: true}]);
+		calc.length = 0;
+		changes.length = 0;
+
+		await new Promise(y => setTimeout(y, 20));
+		assertEquals(calc, []);
+		assertEquals(changes, [{data: {value: 10}}]);
+		calc.length = 0;
+		changes.length = 0;
+
+		objId.value = 15;
+
+		assertEquals(calc, [15]);
+		assertEquals(changes, [{busy: true}]);
+		calc.length = 0;
+		changes.length = 0;
+
+		await new Promise(y => setTimeout(y, 20));
+		assertEquals(calc, []);
+		assertEquals(changes, [{data: {value: 15}}]);
+		calc.length = 0;
+		changes.length = 0;
+
+		objId.value = 0;
+
+		assertEquals(calc, [0]);
+		assertEquals(changes, [{busy: true}]);
+		calc.length = 0;
+		changes.length = 0;
+
+		await new Promise(y => setTimeout(y, 20));
+		assertEquals(calc, []);
+		assertEquals(changes, [{error: "Invalid object ID"}]);
+		calc.length = 0;
+		changes.length = 0;
+	}
+);
+
+Deno.test
 (	'Has property',
 	() =>
 	{	const sigA = sig({yes: true}, {yes: false});
