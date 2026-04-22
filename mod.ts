@@ -281,12 +281,12 @@
 
 	```ts
 	let backingValue = 0;
-	const mySig = sig(() => backingValue, undefined, newValue => {backingValue = newValue});
+	const mySig = sig(() => backingValue, NaN, newValue => {backingValue = newValue});
 
 	console.log(mySig.value); // 0
 	mySig.value = 42; // Calls setter
 	mySig.set(43); // Also calls setter, doesn't convert to value signal
-	console.log(mySig.value); // 42
+	console.log(mySig.value); // 43
 	```
 
 	## Subscribing to Signal Changes
